@@ -114,11 +114,11 @@ export default function WeatherPage() {
   };
   const parseWeather = (data) => {
     const line = data.split("\n").map((item) => item.trim());
-    console.log("line", line);
+    // console.log("line", line);
     const headerIndex = line.findIndex((line) => line.includes("YYMMDDHHMI"));
-    console.log("headerIndex", headerIndex);
+    // console.log("headerIndex", headerIndex);
     const header = line[headerIndex].replace("#", "").trim().split(/\s+/);
-    console.log("header", header);
+    // console.log("header", header);
     const datalines = line
       .slice(headerIndex + 1)
       .filter((line) => line && !line.startsWith("#"));

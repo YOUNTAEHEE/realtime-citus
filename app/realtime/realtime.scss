@@ -1,0 +1,88 @@
+.realtime-container {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+
+  .realtime-title {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+  }
+
+  .sensor-values {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-bottom: 30px;
+
+    .sensor-box {
+      background: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      min-width: 150px;
+
+      h3 {
+        margin: 0;
+        color: #666;
+        font-size: 1rem;
+        margin-bottom: 10px;
+      }
+
+      p {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: bold;
+        color: #333;
+      }
+    }
+  }
+
+  .chart-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// 다크모드 지원
+body.dark-mode {
+  .realtime-container {
+    .realtime-title {
+      color: #fff;
+    }
+
+    .sensor-box {
+      background: #1a1a1a;
+
+      h3 {
+        color: #999;
+      }
+
+      p {
+        color: #fff;
+      }
+    }
+
+    .chart-container {
+      background: #1a1a1a;
+    }
+  }
+}
+
+// 반응형 디자인
+@media (max-width: 768px) {
+  .realtime-container {
+    .sensor-values {
+      flex-direction: column;
+      align-items: center;
+
+      .sensor-box {
+        width: 100%;
+        max-width: 300px;
+      }
+    }
+  }
+}

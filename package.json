@@ -1,0 +1,38 @@
+{
+  "name": "citus-pj",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@nextui-org/date-picker": "^2.3.8",
+    "@nextui-org/react": "^2.6.10",
+    "axios": "^1.7.9",
+    "chart.js": "^4.4.7",
+    "chartjs-plugin-zoom": "^2.2.0",
+    "framer-motion": "^11.15.0",
+    "mongoose": "^8.8.4",
+    "next": "15.0.3",
+    "react": "^18.2.0",
+    "react-bootstrap": "^2.10.9",
+    "react-chartjs-2": "^5.3.0",
+    "react-csv": "^2.2.2",
+    "react-dom": "^18.2.0",
+    "react-icons": "^5.4.0",
+    "react-js-pagination": "^3.0.3",
+    "react-spinners": "^0.15.0",
+    "sass": "^1.82.0",
+    "uuid": "^11.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.1",
+    "@types/react": "19.0.1",
+    "@types/react-csv": "^1.1.10",
+    "eslint": "^8",
+    "eslint-config-next": "15.0.3"
+  }
+}

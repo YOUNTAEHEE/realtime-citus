@@ -18,6 +18,30 @@ import { BeatLoader } from "react-spinners";
 // import { Barchart1, Linechart } from "../../../commondata/chartsdata";
 // import PageHeader from "../../../layouts/layoutcomponents/pageheader";
 import "./weatherChart.scss";
+
+const colors = {
+  temperature: {
+    main: "rgb(255, 99, 132)",
+    background: "rgba(255, 99, 132, 0.1)",
+    light: "rgba(255, 99, 132, 0.5)",
+  },
+  humidity: {
+    main: "rgb(75, 192, 192)",
+    background: "rgba(75, 192, 192, 0.1)",
+    light: "rgba(75, 192, 192, 0.5)",
+  },
+  windSpeed: {
+    main: "rgb(53, 162, 235)",
+    background: "rgba(53, 162, 235, 0.1)",
+    light: "rgba(53, 162, 235, 0.5)",
+  },
+  windDirection: {
+    main: "rgb(255, 159, 64)",
+    background: "rgba(255, 159, 64, 0.1)",
+    light: "rgba(255, 159, 64, 0.5)",
+  },
+};
+
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -223,6 +247,7 @@ export default function WeatherReact() {
   const [selectedRegion, setSelectedRegion] = useState("119");
   const [isSearch, setIsSearch] = useState(false);
   const [totalData, setTotalData] = useState([]);
+  const [showTable, setShowTable] = useState(false);
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [
@@ -233,10 +258,22 @@ export default function WeatherReact() {
         backgroundColor: "rgba(255, 99, 132, 0.5)",
       },
       {
+        label: "상대습도 (%)",
+        data: [],
+        borderColor: "rgb(75, 192, 192)",
+        backgroundColor: "rgba(75, 192, 192, 0.5)",
+      },
+      {
         label: "풍속 (m/s)",
         data: [],
         borderColor: "rgb(53, 162, 235)",
         backgroundColor: "rgba(53, 162, 235, 0.5)",
+      },
+      {
+        label: "풍향 (deg)",
+        data: [],
+        borderColor: "rgb(255, 159, 64)",
+        backgroundColor: "rgba(255, 159, 64, 0.5)",
       },
     ],
   });
@@ -250,13 +287,17 @@ export default function WeatherReact() {
         backgroundColor: "rgba(255, 99, 132, 0.5)",
       },
       {
-        label: "이슬점온도 (C)",
+        label: "이슬점온도 (°C)",
         data: [],
         borderColor: "rgb(53, 162, 235)",
         backgroundColor: "rgba(53, 162, 235, 0.5)",
       },
     ],
   });
+
+  // 각 차트의 타입을 관리하는 state 추가
+  const [chart1Type, setChart1Type] = useState("line");
+  const [chart2Type, setChart2Type] = useState("line");
 
   const formatAPIDate = (date) => {
     console.log("date", date);
@@ -312,36 +353,40 @@ export default function WeatherReact() {
 
       if (data && Array.isArray(data) && data.length > 0) {
         setChartData({
-          labels: data.map((item) => item.YYMMDDHHMI),
+          labels: data.map((item) => formatDateTime(item.YYMMDDHHMI)),
           datasets: [
             {
               label: "기온 (°C)",
               data: data.map((item) => parseFloat(item.TA) || 0),
               borderColor: "rgb(255, 99, 132)",
               backgroundColor: "rgba(255, 99, 132, 0.5)",
+              yAxisID: "y-temperature",
             },
+            {
+              label: "상대습도 (%)",
+              data: data.map((item) => parseFloat(item.HM) || 0),
+              borderColor: "rgb(75, 192, 192)",
+              backgroundColor: "rgba(75, 192, 192, 0.5)",
+              yAxisID: "y-humidity",
+            },
+          ],
+        });
+        setChartData2({
+          labels: data.map((item) => formatDateTime(item.YYMMDDHHMI)),
+          datasets: [
             {
               label: "풍속 (m/s)",
               data: data.map((item) => parseFloat(item.WS) || 0),
               borderColor: "rgb(53, 162, 235)",
               backgroundColor: "rgba(53, 162, 235, 0.5)",
-            },
-          ],
-        });
-        setChartData2({
-          labels: data.map((item) => item.YYMMDDHHMI),
-          datasets: [
-            {
-              label: "기압변화량 (hPa)",
-              data: data.map((item) => parseFloat(item.PR) || 0),
-              borderColor: "rgb(255, 99, 132)",
-              backgroundColor: "rgba(255, 99, 132, 0.5)",
+              yAxisID: "y-windSpeed",
             },
             {
-              label: "이슬점온도 (C)",
-              data: data.map((item) => parseFloat(item.TD) || 0),
-              borderColor: "rgb(53, 162, 235)",
-              backgroundColor: "rgba(53, 162, 235, 0.5)",
+              label: "풍향 (deg)",
+              data: data.map((item) => parseFloat(item.WD) || 0),
+              borderColor: "rgb(255, 159, 64)",
+              backgroundColor: "rgba(255, 159, 64, 0.5)",
+              yAxisID: "y-windDirection",
             },
           ],
         });
@@ -375,8 +420,8 @@ export default function WeatherReact() {
     datetime: "",
     temperature: "",
     windSpeed: "",
-    pressure: "",
-    dewPoint: "",
+    humidity: "",
+    windDirection: "",
   });
 
   const handleTempSearch = async () => {
@@ -431,8 +476,8 @@ export default function WeatherReact() {
           datetime: response.data.datetime || "",
           temperature: response.data.temperature || "",
           windSpeed: response.data.windSpeed || "",
-          pressure: response.data.pressure || "",
-          dewPoint: response.data.dewPoint || "",
+          humidity: response.data.humidity || "", // pressure를 humidity로 변경
+          windDirection: response.data.windDirection || "", // dewPoint를 windDirection으로 변경
         });
       }
     } catch (error) {
@@ -565,10 +610,10 @@ export default function WeatherReact() {
               {tempSearchResult.datetime ? (
                 <>
                   날짜&시간: {tempSearchResult.datetime} , 기온:{"   "}
-                  {tempSearchResult.temperature}°C , 풍속:{"   "}
-                  {tempSearchResult.windSpeed}m/s , 기압변화량:{"   "}
-                  {tempSearchResult.pressure}hPa , 이슬점온도:{"   "}
-                  {tempSearchResult.dewPoint}°C
+                  {tempSearchResult.temperature}°C , 습도:{"   "}
+                  {tempSearchResult.humidity}% , 풍속:{"   "}
+                  {tempSearchResult.windSpeed}m/s , 풍향:{"   "}
+                  {tempSearchResult.windDirection}°
                 </>
               ) : (
                 "날짜를 선택하고 검색해주세요."
@@ -578,86 +623,266 @@ export default function WeatherReact() {
 
           <div className="chart_container_wrap">
             <div className="chart_box">
-              <h3 className="chart_title">기온 & 풍속</h3>
+              <div className="chart_header">
+                <h3 className="chart_title">기온 & 상대습도</h3>
+                <div className="chart_type_selector">
+                  <button
+                    className={`chart_type_btn ${
+                      chart1Type === "line" ? "active" : ""
+                    }`}
+                    onClick={() => setChart1Type("line")}
+                    data-type="line"
+                  >
+                    라인 차트
+                  </button>
+                  <button
+                    className={`chart_type_btn ${
+                      chart1Type === "bar" ? "active" : ""
+                    }`}
+                    onClick={() => setChart1Type("bar")}
+                    data-type="bar"
+                  >
+                    바 차트
+                  </button>
+                </div>
+              </div>
               <div className="chart_content">
-                <Line
-                  options={{
-                    ...getChartOptions(isDarkMode),
-                    ...Linechart,
-                    scales: {
-                      ...getChartOptions(isDarkMode).scales,
-                      ...Linechart.scales,
-                    },
-                    plugins: {
-                      ...getChartOptions(isDarkMode).plugins,
-                      ...Linechart.plugins,
-                    },
-                  }}
-                  data={chartData}
-                />
+                {chart1Type === "line" ? (
+                  <Line
+                    options={{
+                      ...getChartOptions(isDarkMode),
+                      scales: {
+                        "y-temperature": {
+                          type: "linear",
+                          position: "left",
+                          title: {
+                            display: true,
+                            text: "기온 (°C)",
+                            color: colors.temperature.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.temperature.main },
+                          grid: { color: colors.temperature.background },
+                        },
+                        "y-humidity": {
+                          type: "linear",
+                          position: "right",
+                          title: {
+                            display: true,
+                            text: "상대습도 (%)",
+                            color: colors.humidity.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.humidity.main },
+                          grid: {
+                            drawOnChartArea: false,
+                            color: colors.humidity.background,
+                          },
+                        },
+                        x: {
+                          /* 기존 x축 옵션 유지 */
+                        },
+                      },
+                    }}
+                    data={chartData}
+                  />
+                ) : (
+                  <Bar
+                    options={{
+                      ...getChartOptions(isDarkMode),
+                      scales: {
+                        "y-temperature": {
+                          type: "linear",
+                          position: "left",
+                          title: {
+                            display: true,
+                            text: "기온 (°C)",
+                            color: colors.temperature.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.temperature.main },
+                          grid: { color: colors.temperature.background },
+                        },
+                        "y-humidity": {
+                          type: "linear",
+                          position: "right",
+                          title: {
+                            display: true,
+                            text: "상대습도 (%)",
+                            color: colors.humidity.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.humidity.main },
+                          grid: {
+                            drawOnChartArea: false,
+                            color: colors.humidity.background,
+                          },
+                        },
+                        x: {
+                          /* 기존 x축 옵션 유지 */
+                        },
+                      },
+                    }}
+                    data={chartData}
+                  />
+                )}
               </div>
             </div>
 
             <div className="chart_box">
-              <h3 className="chart_title">기압변화량 & 이슬점온도</h3>
+              <div className="chart_header">
+                <h3 className="chart_title">풍속 & 풍향</h3>
+                <div className="chart_type_selector">
+                  <button
+                    className={`chart_type_btn ${
+                      chart2Type === "line" ? "active" : ""
+                    }`}
+                    onClick={() => setChart2Type("line")}
+                    data-type="line"
+                  >
+                    라인 차트
+                  </button>
+                  <button
+                    className={`chart_type_btn ${
+                      chart2Type === "bar" ? "active" : ""
+                    }`}
+                    onClick={() => setChart2Type("bar")}
+                    data-type="bar"
+                  >
+                    바 차트
+                  </button>
+                </div>
+              </div>
               <div className="chart_content">
-                <Bar
-                  options={{
-                    ...getChartOptions(isDarkMode),
-                    ...Barchart1,
-                    scales: {
-                      ...getChartOptions(isDarkMode).scales,
-                      ...Barchart1.scales,
-                    },
-                    plugins: {
-                      ...getChartOptions(isDarkMode).plugins,
-                      ...Barchart1.plugins,
-                    },
-                  }}
-                  data={chartData2}
-                />
+                {chart2Type === "line" ? (
+                  <Line
+                    options={{
+                      ...getChartOptions(isDarkMode),
+                      scales: {
+                        "y-windSpeed": {
+                          type: "linear",
+                          position: "left",
+                          title: {
+                            display: true,
+                            text: "풍속 (m/s)",
+                            color: colors.windSpeed.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.windSpeed.main },
+                          grid: { color: colors.windSpeed.background },
+                        },
+                        "y-windDirection": {
+                          type: "linear",
+                          position: "right",
+                          title: {
+                            display: true,
+                            text: "풍향 (deg)",
+                            color: colors.windDirection.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.windDirection.main },
+                          grid: {
+                            drawOnChartArea: false,
+                            color: colors.windDirection.background,
+                          },
+                        },
+                        x: {
+                          /* 기존 x축 옵션 유지 */
+                        },
+                      },
+                    }}
+                    data={chartData2}
+                  />
+                ) : (
+                  <Bar
+                    options={{
+                      ...getChartOptions(isDarkMode),
+                      scales: {
+                        "y-windSpeed": {
+                          type: "linear",
+                          position: "left",
+                          title: {
+                            display: true,
+                            text: "풍속 (m/s)",
+                            color: colors.windSpeed.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.windSpeed.main },
+                          grid: { color: colors.windSpeed.background },
+                        },
+                        "y-windDirection": {
+                          type: "linear",
+                          position: "right",
+                          title: {
+                            display: true,
+                            text: "풍향 (deg)",
+                            color: colors.windDirection.main,
+                            font: { weight: "bold" },
+                          },
+                          ticks: { color: colors.windDirection.main },
+                          grid: {
+                            drawOnChartArea: false,
+                            color: colors.windDirection.background,
+                          },
+                        },
+                        x: {
+                          /* 기존 x축 옵션 유지 */
+                        },
+                      },
+                    }}
+                    data={chartData2}
+                  />
+                )}
               </div>
             </div>
           </div>
 
-          <div className="weather_table_wrap">
-            <table className="weather_table">
-              <thead>
-                <tr>
-                  <th>날짜/시간</th>
-                  <th>기온 (°C)</th>
-                  <th>풍속 (m/s)</th>
-                  <th>기압변화량 (hPa)</th>
-                  <th>이슬점온도 (C)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {totalData && totalData.length > 0 ? (
-                  totalData.map((item, index) => {
-                    return (
-                      <tr key={index}>
-                        <td className="dark-mode-cell">
-                          {formatDateTime(item.YYMMDDHHMI)}
-                        </td>
-                        <td className="dark-mode-cell">{item.TA}</td>
-                        <td className="dark-mode-cell">{item.WS}</td>
-                        <td className="dark-mode-cell">{item.PR}</td>
-                        <td className="dark-mode-cell">{item.TD}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
+          <button
+            onClick={() => setShowTable(!showTable)}
+            className="toggle-button"
+          >
+            {showTable ? "테이블 숨기기" : "테이블 보기"}
+          </button>
+          {showTable && (
+            <div className="weather_table_wrap">
+              <table className="weather_table">
+                <thead>
                   <tr>
-                    <td colSpan="5">
-                      <div className="loding_icon_table">
-                        <BeatLoader color="#b19ae0" />
-                      </div>
-                    </td>
+                    <th>날짜/시간</th>
+                    <th>기온 (°C)</th>
+                    <th>상대습도 (%)</th>
+                    <th>풍속 (m/s)</th>
+                    <th>풍향 (deg)</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {totalData && totalData.length > 0 ? (
+                    totalData.map((item, index) => {
+                      return (
+                        <tr key={index}>
+                          <td className="dark-mode-cell">
+                            {formatDateTime(item.YYMMDDHHMI)}
+                          </td>
+                          <td className="dark-mode-cell">{item.TA}</td>
+                          <td className="dark-mode-cell">{item.HM}</td>
+                          <td className="dark-mode-cell">{item.WS}</td>
+                          <td className="dark-mode-cell">{item.WD}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="5">
+                        <div className="loding_icon_table">
+                          <BeatLoader color="#b19ae0" />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
     </div>

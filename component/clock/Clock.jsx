@@ -1,7 +1,5 @@
 "use client";
-import styles from "./clock.scss";
-import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import TopNav from "../topNav/TopNav";
 export default function Clock() {
   const [currentTime, setCurrentTime] = useState("");

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import TopNav from "../topNav/TopNav";
+import "./clock.scss";
 export default function Clock() {
   const [currentTime, setCurrentTime] = useState("");
   useEffect(() => {

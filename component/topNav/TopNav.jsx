@@ -52,7 +52,7 @@ export default function TopNav() {
         }`}
         onClick={() => handleTopNavClick("weatherReact")}
       >
-        기상청2(리액트 프로젝트용)
+        기상청2
       </div>
       <span>|</span>
       <div

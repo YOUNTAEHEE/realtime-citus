@@ -247,211 +247,8 @@
 //   );
 // }
 
-// "use client";
-// import {
-//   CategoryScale,
-//   Chart as ChartJS,
-//   Legend,
-//   LinearScale,
-//   LineElement,
-//   PointElement,
-//   Title,
-//   Tooltip,
-// } from "chart.js";
-// import { useEffect, useState, useRef } from "react";
-// import { Line } from "react-chartjs-2";
-// import "./realtime.scss";
-
-// // Chart.js 등록
-// ChartJS.register(
-//   CategoryScale,
-//   LinearScale,
-//   PointElement,
-//   LineElement,
-//   Title,
-//   Tooltip,
-//   Legend
-// );
-
-// export default function RealtimePage() {
-//   const [data, setData] = useState({ temperature: 0, humidity: 0 });
-//   const [connected, setConnected] = useState(false);
-//   const [error, setError] = useState(null);
-//   const [history, setHistory] = useState([]);
-//   const [showTable, setShowTable] = useState(false);
-//   const [isConnecting, setIsConnecting] = useState(false);
-//   const wsRef = useRef(null);
-//   const reconnectTimeoutRef = useRef(null);
-
-//   // WebSocket 연결 함수
-//   const connectWebSocket = () => {
-//     if (wsRef.current) {
-//       console.log("⚠️ 기존 WebSocket 연결 종료 중...");
-//       wsRef.current.onclose = null;
-//       wsRef.current.close();
-//       wsRef.current = null;
-//     }
-
-//     setIsConnecting(true);
-
-//     setTimeout(() => {
-//       console.log("🔗 WebSocket 연결 시도...");
-//       wsRef.current = new WebSocket("ws://localhost:8080/modbus");
-
-//       wsRef.current.onopen = () => {
-//         console.log("✅ WebSocket 연결됨");
-//         setConnected(true);
-//         setError(null);
-//         setIsConnecting(false);
-//       };
-
-//       wsRef.current.onmessage = (event) => {
-//         try {
-//           const newData = JSON.parse(event.data);
-//           const processedData = {
-//             temperature: newData.temperature / 10,
-//             humidity: newData.humidity / 10,
-//           };
-//           setData(processedData);
-//           setHistory((prev) => {
-//             const now = new Date();
-//             const oneHourAgo = now.getTime() - 60 * 60 * 1000;
-//             const newHistory = [
-//               ...prev,
-//               {
-//                 ...processedData,
-//                 timestamp: now.toLocaleTimeString(),
-//                 fullTimestamp: now.getTime(),
-//               },
-//             ].filter((item) => item.fullTimestamp >= oneHourAgo);
-//             return newHistory;
-//           });
-//         } catch (e) {
-//           console.error("❌ 데이터 파싱 오류:", e);
-//           setError("데이터 형식 오류");
-//         }
-//       };
-
-//       wsRef.current.onerror = (error) => {
-//         console.error("❌ WebSocket 오류:", error);
-//         setError("연결 오류");
-//         setConnected(false);
-//         setIsConnecting(false);
-//       };
-
-//       wsRef.current.onclose = () => {
-//         console.log("⚠️ WebSocket 연결 종료됨. 5초 후 재연결...");
-//         setConnected(false);
-//         wsRef.current = null;
-//         reconnectTimeoutRef.current = setTimeout(connectWebSocket, 5000);
-//       };
-//     }, 500);
-//   };
-
-//   // 컴포넌트 마운트 시 WebSocket 연결
-//   useEffect(() => {
-//     connectWebSocket();
-
-//     return () => {
-//       if (wsRef.current) {
-//         console.log("🛑 WebSocket 종료...");
-//         wsRef.current.close();
-//       }
-//       if (reconnectTimeoutRef.current) {
-//         clearTimeout(reconnectTimeoutRef.current);
-//       }
-//     };
-//   }, []);
-
-//   // 차트 옵션 수정
-//   const chartOptions = {
-//     responsive: true,
-//     maintainAspectRatio: false,
-//     animation: {
-//       duration: 0,
-//     },
-//     plugins: {
-//       legend: {
-//         position: "top",
-//         labels: {
-//           usePointStyle: true,
-//           padding: 20,
-//           font: {
-//             size: 12,
-//           },
-//         },
-//       },
-//       title: {
-//         display: false,
-//       },
-//     },
-//     scales: {
-//       y: {
-//         beginAtZero: true,
-//         grid: {
-//           color: "#f0f0f0",
-//         },
-//         ticks: {
-//           font: {
-//             size: 11,
-//           },
-//         },
-//       },
-//       x: {
-//         grid: {
-//           display: false,
-//         },
-//         ticks: {
-//           autoSkip: true,
-//           maxTicksLimit: 20,
-//           font: {
-//             size: 11,
-//           },
-//         },
-//       },
-//     },
-//   };
-
-//   // 차트 데이터 스타일 수정
-//   const chartData = {
-//     labels: history.map((item) => item.timestamp),
-//     datasets: [
-//       {
-//         label: "온도 (°C)",
-//         data: history.map((item) => item.temperature),
-//         borderColor: "#FF8787",
-//         backgroundColor: "rgba(255, 135, 135, 0.1)",
-//         borderWidth: 2,
-//         tension: 0.1,
-//         fill: true,
-//         pointRadius: 0,
-//       },
-//       {
-//         label: "습도 (%)",
-//         data: history.map((item) => item.humidity),
-//         borderColor: "#74C0FC",
-//         backgroundColor: "rgba(116, 192, 252, 0.1)",
-//         borderWidth: 2,
-//         tension: 0.1,
-//         fill: true,
-//         pointRadius: 0,
-//       },
-//     ],
-//   };
-
-//   return (
-//     <div className="realtime-container">
-//       <h1>온도, 습도 실시간 조회</h1>
-//       <div className="chart-wrapper">
-//         <Line data={chartData} options={chartOptions} />
-//       </div>
-//     </div>
-//   );
-// }
-
 "use client";
 
-import dynamic from "next/dynamic";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -462,6 +259,7 @@ import {
   Title,
   Tooltip,
 } from "chart.js";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import "./realtime.scss";
 
@@ -649,7 +447,9 @@ export default function RealtimePage() {
 
       <div className="status-wrapper">
         <span className="status-label">연결 상태:</span>
-        <span className={`status-badge ${connected ? "connected" : "disconnected"}`}>
+        <span
+          className={`status-badge ${connected ? "connected" : "disconnected"}`}
+        >
           {connected ? "연결됨" : "연결 안됨"}
         </span>
         <button
@@ -676,7 +476,10 @@ export default function RealtimePage() {
         <Line data={chartData} options={chartOptions} />
       </div>
 
-      <button onClick={() => setShowTable(!showTable)} className="toggle-button">
+      <button
+        onClick={() => setShowTable(!showTable)}
+        className="toggle-button"
+      >
         {showTable ? "테이블 숨기기" : "테이블 보기"}
       </button>
 

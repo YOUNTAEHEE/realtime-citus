@@ -57,6 +57,12 @@ ChartJS.register(
 // 차트 공통 옵션 생성
 const getChartOptions = (isDarkMode) => ({
   responsive: true,
+  maintainAspectRatio: false,
+  interaction: {
+    mode: "nearest", // 데이터 포인트에 가까운 값 선택
+    axis: "x", // X축 기준으로 동작
+    intersect: false,
+  },
   plugins: {
     legend: {
       labels: {
@@ -65,6 +71,29 @@ const getChartOptions = (isDarkMode) => ({
     },
     title: {
       color: isDarkMode ? "#fff" : "#666", // 제목 색상
+    },
+
+    zoom: {
+      pan: {
+        enabled: true, // 팬 기능 활성화
+        mode: "xy", // X축 방향으로만 이동 가능
+        threshold: 10, // 드래그 시작을 위한 최소 이동 거리(px)
+        // onPanStart: () => {
+        //   document.querySelector(".weather_chart").style.cursor = "grabbing";
+        // },
+        // onPanComplete: () => {
+        //   document.querySelector(".weather_chart").style.cursor = "grab";
+        // },
+      },
+      zoom: {
+        wheel: {
+          enabled: true,
+        },
+        pinch: {
+          enabled: true,
+        },
+        mode: "x",
+      },
     },
   },
   scales: {

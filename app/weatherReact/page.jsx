@@ -1,23 +1,54 @@
 "use client";
+import dynamic from "next/dynamic";
+
 import axios from "axios";
-import {
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
-import zoomPlugin from "chartjs-plugin-zoom";
+import "chart.js/auto"; // 🔥 Chart.js에서 모든 필수 요소를 자동으로 등록!
 import { useEffect, useState } from "react";
-import { Bar, Line } from "react-chartjs-2";
+import { Bar } from "react-chartjs-2";
+// import { Bar, Line } from "react-chartjs-2";
 import { BeatLoader } from "react-spinners";
 // import { Barchart1, Linechart } from "../../../commondata/chartsdata";
 // import PageHeader from "../../../layouts/layoutcomponents/pageheader";
 import "./weatherChart.scss";
+
+// Chart 컴포넌트를 dynamic import로 변경
+const Chart = dynamic(
+  () =>
+    Promise.all([
+      import("chart.js"),
+      import("react-chartjs-2"),
+      import("chartjs-plugin-zoom"),
+    ]).then(([ChartModule, ReactChartJS, ZoomPlugin]) => {
+      const {
+        Chart,
+        CategoryScale,
+        LinearScale,
+        PointElement,
+        LineElement,
+        Title,
+        Tooltip,
+        Legend,
+      } = ChartModule;
+
+      // Chart.js 컴포넌트 등록
+      Chart.register(
+        CategoryScale,
+        LinearScale,
+        PointElement,
+        LineElement,
+        Title,
+        Tooltip,
+        Legend,
+        ZoomPlugin.default // zoom plugin은 default export를 사용
+      );
+
+      return ReactChartJS.Line;
+    }),
+  {
+    ssr: false,
+    loading: () => <BeatLoader color="#b19ae0" />,
+  }
+);
 
 const colors = {
   temperature: {
@@ -42,17 +73,17 @@ const colors = {
   },
 };
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-  zoomPlugin
-);
+// ChartJS.register(
+//   CategoryScale,
+//   LinearScale,
+//   PointElement,
+//   LineElement,
+//   BarElement,
+//   Title,
+//   Tooltip,
+//   Legend,
+//   zoomPlugin
+// );
 
 // 차트 공통 옵션 생성
 const getChartOptions = (isDarkMode) => ({
@@ -106,6 +137,7 @@ const getChartOptions = (isDarkMode) => ({
       },
     },
     y: {
+      type: "linear",
       ticks: {
         color: isDarkMode ? "#fff" : "#666", // Y축 레이블 색상
       },
@@ -270,6 +302,7 @@ export const Barchart2 = {
   },
 };
 export default function WeatherReact() {
+  const [isClient, setIsClient] = useState(false);
   const [date_temp_search, setDate_temp_search] = useState("");
   const [temp_search, setTemp_search] = useState("high_temp");
   const [isLoading, setIsLoading] = useState(false);
@@ -521,6 +554,7 @@ export default function WeatherReact() {
   };
 
   useEffect(() => {
+    setIsClient(true);
     fetchWeatherData();
   }, []);
 
@@ -553,6 +587,51 @@ export default function WeatherReact() {
 
     return () => observer.disconnect();
   }, []);
+
+  if (!isClient) {
+    return (
+      <div className="loading">
+        <BeatLoader color="#b19ae0" />
+      </div>
+    );
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: "top",
+      },
+      title: {
+        display: true,
+        text: "기온 및 풍속 시간 변화",
+      },
+      zoom: {
+        pan: {
+          enabled: true,
+          mode: "xy",
+        },
+        zoom: {
+          wheel: {
+            enabled: true,
+          },
+          pinch: {
+            enabled: true,
+          },
+          mode: "xy",
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+      },
+      x: {
+        display: true,
+      },
+    },
+  };
 
   return (
     <div className="weather_react_wrap">
@@ -677,44 +756,7 @@ export default function WeatherReact() {
               </div>
               <div className="chart_content">
                 {chart1Type === "line" ? (
-                  <Line
-                    options={{
-                      ...getChartOptions(isDarkMode),
-                      scales: {
-                        "y-temperature": {
-                          type: "linear",
-                          position: "left",
-                          title: {
-                            display: true,
-                            text: "기온 (°C)",
-                            color: colors.temperature.main,
-                            font: { weight: "bold" },
-                          },
-                          ticks: { color: colors.temperature.main },
-                          grid: { color: colors.temperature.background },
-                        },
-                        "y-humidity": {
-                          type: "linear",
-                          position: "right",
-                          title: {
-                            display: true,
-                            text: "상대습도 (%)",
-                            color: colors.humidity.main,
-                            font: { weight: "bold" },
-                          },
-                          ticks: { color: colors.humidity.main },
-                          grid: {
-                            drawOnChartArea: false,
-                            color: colors.humidity.background,
-                          },
-                        },
-                        x: {
-                          /* 기존 x축 옵션 유지 */
-                        },
-                      },
-                    }}
-                    data={chartData}
-                  />
+                  <Chart data={chartData} options={options} />
                 ) : (
                   <Bar
                     options={{
@@ -784,44 +826,7 @@ export default function WeatherReact() {
               </div>
               <div className="chart_content">
                 {chart2Type === "line" ? (
-                  <Line
-                    options={{
-                      ...getChartOptions(isDarkMode),
-                      scales: {
-                        "y-windSpeed": {
-                          type: "linear",
-                          position: "left",
-                          title: {
-                            display: true,
-                            text: "풍속 (m/s)",
-                            color: colors.windSpeed.main,
-                            font: { weight: "bold" },
-                          },
-                          ticks: { color: colors.windSpeed.main },
-                          grid: { color: colors.windSpeed.background },
-                        },
-                        "y-windDirection": {
-                          type: "linear",
-                          position: "right",
-                          title: {
-                            display: true,
-                            text: "풍향 (deg)",
-                            color: colors.windDirection.main,
-                            font: { weight: "bold" },
-                          },
-                          ticks: { color: colors.windDirection.main },
-                          grid: {
-                            drawOnChartArea: false,
-                            color: colors.windDirection.background,
-                          },
-                        },
-                        x: {
-                          /* 기존 x축 옵션 유지 */
-                        },
-                      },
-                    }}
-                    data={chartData2}
-                  />
+                  <Chart data={chartData2} options={options} />
                 ) : (
                   <Bar
                     options={{

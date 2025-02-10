@@ -1,43 +1,68 @@
 "use client";
 import axios from "axios";
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
-import zoomPlugin from "chartjs-plugin-zoom";
-import { useEffect, useState } from "react";
-import { Line } from "react-chartjs-2";
+import dynamic from "next/dynamic";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { SlArrowLeft, SlArrowRight } from "react-icons/sl";
 import { BeatLoader } from "react-spinners";
 import { v4 as uuidv4 } from "uuid";
 import "./weatherPage.scss";
 
-// Chart.js 초기화
-ChartJS.register(
-  LineElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
-  zoomPlugin
-);
-export default function WeatherPage() {
-  const [isSearch, setIsSearch] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [limit, setLimit] = useState(10);
-  const [totalData, setTotalData] = useState([]);
-  const [selectedRegion, setSelectedRegion] = useState("119");
-  const [viewData, setViewData] = useState([]);
+// Chart.js와 관련된 모든 import를 dynamic import로 변경
+const ChartComponent = dynamic(
+  () =>
+    Promise.all([
+      import("chart.js"),
+      import("react-chartjs-2"),
+      import("chartjs-plugin-zoom"),
+    ]).then(([ChartJS, ReactChartJS, ZoomPlugin]) => {
+      const {
+        Chart,
+        CategoryScale,
+        LinearScale,
+        PointElement,
+        LineElement,
+        Title,
+        Tooltip,
+        Legend,
+      } = ChartJS;
 
+      Chart.register(
+        CategoryScale,
+        LinearScale,
+        PointElement,
+        LineElement,
+        Title,
+        Tooltip,
+        Legend,
+        ZoomPlugin
+      );
+
+      return ReactChartJS.Line;
+    }),
+  {
+    ssr: false,
+    loading: () => <BeatLoader color="#b19ae0" />,
+  }
+);
+
+// 초기 상태값을 함수로 설정
+const getInitialState = () => {
+  return {
+    isLoading: false,
+    currentPage: 1,
+    limit: 10,
+    totalData: [],
+    selectedRegion: "119",
+    viewData: [],
+    // ... 다른 초기 상태값들
+  };
+};
+
+const WeatherPage = () => {
+  // 초기 상태값을 함수로 설정
+  const [state, setState] = useState(getInitialState());
+  const [isClient, setIsClient] = useState(false);
+  const [isSearch, setIsSearch] = useState(false);
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [
@@ -55,6 +80,7 @@ export default function WeatherPage() {
       },
     ],
   });
+  const chartRef = useRef(null);
 
   const formatAPIDate = (date) => {
     console.log("date", date);
@@ -75,41 +101,66 @@ export default function WeatherPage() {
   const [date_last, setDate_last] = useState(getTodayDate());
 
   useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
     fetchWeather();
   }, []);
   useEffect(() => {
     if (isSearch) {
-      setIsLoading(true);
+      setState((prevState) => ({ ...prevState, isLoading: true }));
       fetchWeather();
-      setIsLoading(false);
-      setIsSearch(false);
+      setState((prevState) => ({
+        ...prevState,
+        isLoading: false,
+        isSearch: false,
+      }));
     }
   }, [isSearch]);
+
+  useEffect(() => {
+    if (isClient && chartRef.current) {
+      chartRef.current.style.cursor = "grab";
+    }
+  }, [isClient]);
+
   const fetchWeather = async () => {
     try {
-      setIsLoading(true);
-      setViewData([]);
+      setState((prevState) => ({
+        ...prevState,
+        isLoading: true,
+        viewData: [],
+      }));
       const response = await axios.get(
         `/api/weatherAPI?date-first=${formatAPIDate(
           date_first
-        )}&date-last=${formatAPIDate(date_last)}&region=${selectedRegion}`
+        )}&date-last=${formatAPIDate(date_last)}&region=${state.selectedRegion}`
       );
       const data = parseWeather(response.data);
 
       if (data && Array.isArray(data)) {
-        setTotalData(data);
-        setCurrentPage(1);
-
-        setViewData(viewWeatherData(data.slice(0, limit)));
+        setState((prevState) => ({
+          ...prevState,
+          totalData: data,
+          currentPage: 1,
+        }));
+        setState((prevState) => ({
+          ...prevState,
+          viewData: viewWeatherData(data.slice(0, state.limit)),
+        }));
       } else {
-        setTotalData([]);
-        setViewData([]);
+        setState((prevState) => ({
+          ...prevState,
+          totalData: [],
+          viewData: [],
+        }));
       }
     } catch (err) {
       console.log(err);
       alert("데이터 조회에 실패했습니다.");
     } finally {
-      setIsLoading(false); // 로딩 종료
+      setState((prevState) => ({ ...prevState, isLoading: false })); // 로딩 종료
     }
   };
   const parseWeather = (data) => {
@@ -167,14 +218,18 @@ export default function WeatherPage() {
       },
       zoom: {
         pan: {
-          enabled: true, // 팬 기능 활성화
-          mode: "xy", // X축 방향으로만 이동 가능
-          threshold: 10, // 드래그 시작을 위한 최소 이동 거리(px)
+          enabled: true,
+          mode: "xy",
+          threshold: 10,
           onPanStart: () => {
-            document.querySelector(".weather_chart").style.cursor = "grabbing";
+            if (chartRef.current) {
+              chartRef.current.style.cursor = "grabbing";
+            }
           },
           onPanComplete: () => {
-            document.querySelector(".weather_chart").style.cursor = "grab";
+            if (chartRef.current) {
+              chartRef.current.style.cursor = "grab";
+            }
           },
         },
         zoom: {
@@ -191,19 +246,14 @@ export default function WeatherPage() {
   };
 
   const handlePageChange = (pageNumber) => {
-    setCurrentPage(pageNumber);
-    const startIndex = (pageNumber - 1) * limit;
-    const endIndex = pageNumber * limit;
-    setViewData(viewWeatherData(totalData.slice(startIndex, endIndex)));
+    setState((prevState) => ({ ...prevState, currentPage: pageNumber }));
+    const startIndex = (pageNumber - 1) * state.limit;
+    const endIndex = pageNumber * state.limit;
+    setState((prevState) => ({
+      ...prevState,
+      viewData: viewWeatherData(state.totalData.slice(startIndex, endIndex)),
+    }));
   };
-
-  // if (isLoading || totalData.length === 0) {
-  //   return (
-  //     <div className="loding_icon">
-  //       <BeatLoader color="#b19ae0" />
-  //     </div>
-  //   );
-  // }
 
   const LoadingOverlay = () => {
     return (
@@ -213,126 +263,147 @@ export default function WeatherPage() {
     );
   };
 
+  if (!isClient) {
+    return <BeatLoader color="#b19ae0" />;
+  }
+
   return (
-    <div className="weather_container">
-      {isLoading ? (
-        <LoadingOverlay />
-      ) : (
-        <>
-          <div className="weather_top_box">
-            <p className="weather_title">지상 관측자료 조회</p>
-            <div className="weather_search_box">
-              <select
-                className="weather_search_select"
-                onChange={(e) => setSelectedRegion(e.target.value)}
-                value={selectedRegion}
-              >
-                <option value="108">서울</option>
-                <option value="119">수원</option>
-                <option value="112">인천</option>
-                <option value="100">대관령</option>
-                <option value="101">춘천</option>
-              </select>
-              <input
-                type="date"
-                id="date_first"
-                max={getTodayDate()}
-                min="2022-01-01"
-                value={date_first}
-                className="weather_search_input"
-                onChange={(e) => setDate_first(e.target.value)}
-              />
-              ~
-              <input
-                type="date"
-                id="date_last"
-                max={getTodayDate()}
-                min="2022-01-01"
-                value={date_last}
-                className="weather_search_input"
-                onChange={(e) => setDate_last(e.target.value)}
-              />
-              <button
-                className="weather_search_btn"
-                onClick={() => setIsSearch(true)}
-              >
-                검색
-              </button>
+    <Suspense fallback={<BeatLoader color="#b19ae0" />}>
+      <div className="weather_container">
+        {state.isLoading ? (
+          <LoadingOverlay />
+        ) : (
+          <>
+            <div className="weather_top_box">
+              <p className="weather_title">지상 관측자료 조회</p>
+              <div className="weather_search_box">
+                <select
+                  className="weather_search_select"
+                  onChange={(e) =>
+                    setState((prevState) => ({
+                      ...prevState,
+                      selectedRegion: e.target.value,
+                    }))
+                  }
+                  value={state.selectedRegion}
+                >
+                  <option value="108">서울</option>
+                  <option value="119">수원</option>
+                  <option value="112">인천</option>
+                  <option value="100">대관령</option>
+                  <option value="101">춘천</option>
+                </select>
+                <input
+                  type="date"
+                  id="date_first"
+                  max={getTodayDate()}
+                  min="2022-01-01"
+                  value={date_first}
+                  className="weather_search_input"
+                  onChange={(e) => setDate_first(e.target.value)}
+                />
+                ~
+                <input
+                  type="date"
+                  id="date_last"
+                  max={getTodayDate()}
+                  min="2022-01-01"
+                  value={date_last}
+                  className="weather_search_input"
+                  onChange={(e) => setDate_last(e.target.value)}
+                />
+                <button
+                  className="weather_search_btn"
+                  onClick={() => setIsSearch(true)}
+                >
+                  검색
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="weather_chart">
-            <Line options={options} data={chartData} />
-          </div>
-          <div className="weather_page_wrap">
-            <button
-              className="weather_page_btn"
-              disabled={currentPage === 1}
-              onClick={() => handlePageChange(currentPage - 1)}
-            >
-              <SlArrowLeft />
-            </button>
-            <span className="weather_page_text">
-              {currentPage} / {Math.ceil(totalData.length / limit)}
-            </span>
-            <button
-              className="weather_page_btn"
-              disabled={currentPage === Math.ceil(totalData.length / limit)}
-              onClick={() => handlePageChange(currentPage + 1)}
-            >
-              <SlArrowRight />
-            </button>
-          </div>
-          <div className="weather_table_wrap">
-            <table className="weather_table">
-              <thead>
-                <tr>
-                  <th>기온 (°C)</th>
-                  <th>풍속 (m/s)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {viewData && viewData.length > 0 ? (
-                  viewData.map((item, index) => {
-                    return (
-                      <tr key={uuidv4()}>
-                        <td>{item.TA}</td>
-                        <td>{item.WS}</td>
-                      </tr>
-                    );
-                  })
-                ) : (
-                  <tr>
-                    <td colSpan="2">
-                      <div className="loding_icon_table">
-                        <BeatLoader color="#b19ae0" />
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            <div className="weather_chart" ref={chartRef}>
+              <ChartComponent data={chartData} options={options} />
+            </div>
             <div className="weather_page_wrap">
               <button
                 className="weather_page_btn"
-                disabled={currentPage === 1}
-                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={state.currentPage === 1}
+                onClick={() => handlePageChange(state.currentPage - 1)}
               >
                 <SlArrowLeft />
               </button>
               <span className="weather_page_text">
-                {currentPage} / {Math.ceil(totalData.length / limit)}
+                {state.currentPage} /{" "}
+                {Math.ceil(state.totalData.length / state.limit)}
               </span>
               <button
                 className="weather_page_btn"
-                disabled={currentPage === Math.ceil(totalData.length / limit)}
-                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={
+                  state.currentPage ===
+                  Math.ceil(state.totalData.length / state.limit)
+                }
+                onClick={() => handlePageChange(state.currentPage + 1)}
               >
                 <SlArrowRight />
               </button>
             </div>
-          </div>
-        </>
-      )}
-    </div>
+            <div className="weather_table_wrap">
+              <table className="weather_table">
+                <thead>
+                  <tr>
+                    <th>기온 (°C)</th>
+                    <th>풍속 (m/s)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.viewData && state.viewData.length > 0 ? (
+                    state.viewData.map((item, index) => {
+                      return (
+                        <tr key={uuidv4()}>
+                          <td>{item.TA}</td>
+                          <td>{item.WS}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan="2">
+                        <div className="loding_icon_table">
+                          <BeatLoader color="#b19ae0" />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <div className="weather_page_wrap">
+                <button
+                  className="weather_page_btn"
+                  disabled={state.currentPage === 1}
+                  onClick={() => handlePageChange(state.currentPage - 1)}
+                >
+                  <SlArrowLeft />
+                </button>
+                <span className="weather_page_text">
+                  {state.currentPage} /{" "}
+                  {Math.ceil(state.totalData.length / state.limit)}
+                </span>
+                <button
+                  className="weather_page_btn"
+                  disabled={
+                    state.currentPage ===
+                    Math.ceil(state.totalData.length / state.limit)
+                  }
+                  onClick={() => handlePageChange(state.currentPage + 1)}
+                >
+                  <SlArrowRight />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </Suspense>
   );
-}
+};
+
+export default WeatherPage;

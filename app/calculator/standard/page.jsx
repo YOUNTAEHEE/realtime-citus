@@ -1,22 +1,19 @@
 "use client";
-
-import Image from "next/image";
-// import styles from "./versionOne.scss";
-import styles from "./standard.scss";
-import { useState, useEffect, useCallback } from "react";
-import { FaDeleteLeft } from "react-icons/fa6";
-import { connectDB } from "../../../lib/connectDB";
+import dynamic from "next/dynamic";
+import "./standard.scss";
+import { useEffect, useState } from "react";
 import { FaTrashAlt } from "react-icons/fa";
+import { FaDeleteLeft } from "react-icons/fa6";
 import { v4 as uuidv4 } from "uuid";
-import { resolveObjectURL } from "buffer";
-import { CSVLink, CSVDownload } from "react-csv";
+// import { CSVLink, CSVDownload } from "react-csv";
 import {
   addStandard,
   deleteStandard,
-  getStandard,
-  getStandardByDate,
+  getStandardByDate
 } from "../../../lib/actions";
-
+const CSVLink = dynamic(() => import("react-csv").then((mod) => mod.CSVLink), {
+  ssr: false,
+});
 export default function Standard() {
   const [monitor_number, setMonitor_number] = useState("");
   const [result, setResult] = useState("");
@@ -29,12 +26,23 @@ export default function Standard() {
   // const [result_BIN, setResult_BIN] = useState("");
   // const [result_DEC, setResult_DEC] = useState("");
   const [show_mobile_btn, setShow_mobile_btn] = useState(false);
+  // const [selectDate, setSelectDate] = useState(() => {
+  //   return (
+  //     sessionStorage.getItem("selectDate") ||
+  //     new Date().toISOString().split("T")[0]
+  //   );
+  // });
   const [selectDate, setSelectDate] = useState(() => {
-    return (
-      sessionStorage.getItem("selectDate") ||
-      new Date().toISOString().split("T")[0]
-    );
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem("selectedDate") || new Date().toISOString().split("T")[0];
+    }
+    return new Date().toISOString().split("T")[0];
   });
+
+  useEffect(() => {
+    loadHistory();
+  }, [selectDate]);
+
 
   const loadHistory = async () => {
     try {

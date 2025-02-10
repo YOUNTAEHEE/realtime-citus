@@ -1,21 +1,28 @@
 "use client";
+import dynamic from "next/dynamic";
 
-import Image from "next/image";
-// import styles from "./versionOne.scss";
-import styles from "./programmer.scss";
-import { useState, useEffect, useCallback } from "react";
-import { FaDeleteLeft } from "react-icons/fa6";
-import { FaTrashAlt } from "react-icons/fa";
-import { v4 as uuidv4 } from "uuid";
 import { useSearchParams } from "next/navigation";
-import { CSVLink } from "react-csv";
+import { Suspense } from "react";
+import "./programmer.scss";
+// import styles from "./versionOne.scss";
+import { useEffect, useState } from "react";
+// import { CSVLink } from "react-csv";
+import { FaTrashAlt } from "react-icons/fa";
+import { FaDeleteLeft } from "react-icons/fa6";
+import { v4 as uuidv4 } from "uuid";
 import {
   addProgrammer,
-  getProgrammer,
   deleteProgrammer,
+  getProgrammer,
   getProgrammerByDate,
 } from "../../../lib/actions";
-export default function Programmer() {
+// CSVLink를 dynamic import로 변경
+const CSVLink = dynamic(() => import("react-csv").then((mod) => mod.CSVLink), {
+  ssr: false,
+});
+
+// 실제 컴포넌트 로직을 별도의 컴포넌트로 분리
+function ProgrammerContent() {
   const searchParams = useSearchParams();
   const mode = searchParams.get("mode");
   const [monitor_number, setMonitor_number] = useState("");
@@ -30,12 +37,26 @@ export default function Programmer() {
   const [result_BIN, setResult_BIN] = useState("");
   const [result_DEC, setResult_DEC] = useState("");
   const [show_mobile_btn, setShow_mobile_btn] = useState(false);
+  // const [selectDate, setSelectDate] = useState(() => {
+  //   return (
+  //     sessionStorage.getItem("selectedDate") ||
+  //     new Date().toISOString().split("T")[0]
+  //   );
+  // });
+
   const [selectDate, setSelectDate] = useState(() => {
-    return (
-      sessionStorage.getItem("selectedDate") ||
-      new Date().toISOString().split("T")[0]
-    );
+    if (typeof window !== "undefined") {
+      return (
+        sessionStorage.getItem("selectedDate") ||
+        new Date().toISOString().split("T")[0]
+      );
+    }
+    return new Date().toISOString().split("T")[0];
   });
+
+  useEffect(() => {
+    loadHistory();
+  }, [selectDate]);
 
   const CSVHeader = [
     { label: "날짜", key: "monitor_date" },
@@ -910,5 +931,14 @@ export default function Programmer() {
         </div>
       </div>
     </div>
+  );
+}
+
+// 메인 컴포넌트
+export default function Programmer() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProgrammerContent />
+    </Suspense>
   );
 }

@@ -9,8 +9,6 @@ export default function TopNav() {
     setChoice_top_nav(type);
     if (type === "calculator") {
       router.push("/calculator/standard");
-    } else if (type === "weather") {
-      router.push("/weather");
     } else if (type === "weatherpage") {
       router.push("/weatherpage");
     } else if (type === "weatherReact") {

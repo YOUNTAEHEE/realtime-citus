@@ -31,15 +31,27 @@ const Line = dynamic(() => import("react-chartjs-2").then((mod) => mod.Line), {
 });
 
 export default function RealtimePage() {
-  const [data1, setData1] = useState({ temperature: 0, humidity: 0 });
-  const [data2, setData2] = useState({ temperature: 0, humidity: 0 });
+  const [devices, setDevices] = useState([
+    {
+      id: "Modbus1",
+      name: "온습도 센서 1",
+      host: "192.168.10.205",
+      data: { temperature: 0, humidity: 0 },
+      history: [],
+      showTable: false,
+    },
+  ]);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
-  const [history1, setHistory1] = useState([]);
-  const [history2, setHistory2] = useState([]);
-  const [showTable1, setShowTable1] = useState(false);
-  const [showTable2, setShowTable2] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newDevice, setNewDevice] = useState({
+    deviceId: "",
+    name: "",
+    host: "",
+    port: 502,
+    startAddress: 10,
+  });
 
   useEffect(() => {
     let ws = null;
@@ -71,50 +83,35 @@ export default function RealtimePage() {
 
     ws.onmessage = (event) => {
       try {
-        const newData = JSON.parse(event.data);
-        // sensor1 데이터 처리
-        const processedData1 = {
-          temperature: newData.sensor1.temperature / 10,
-          humidity: newData.sensor1.humidity / 10,
-        };
-        setData1(processedData1);
+        const data = JSON.parse(event.data);
+        setDevices((prev) =>
+          prev.map((device) => {
+            if (data[device.id]) {
+              const [rawTemperature, rawHumidity] = data[device.id];
+              const temperature = rawTemperature / 10.0;
+              const humidity = rawHumidity / 10.0;
+              const now = new Date();
+              const newHistory = [
+                ...device.history,
+                {
+                  temperature,
+                  humidity,
+                  timestamp: now.toLocaleTimeString(),
+                  fullTimestamp: now.getTime(),
+                },
+              ].filter(
+                (item) => item.fullTimestamp >= now.getTime() - 60 * 60 * 1000
+              );
 
-        // sensor2 데이터 처리
-        const processedData2 = {
-          temperature: newData.sensor2.temperature / 10,
-          humidity: newData.sensor2.humidity / 10,
-        };
-        setData2(processedData2);
-
-        // sensor1 히스토리 업데이트
-        setHistory1((prev) => {
-          const now = new Date();
-          const newHistory = [
-            ...prev,
-            {
-              ...processedData1,
-              timestamp: now.toLocaleTimeString(),
-              fullTimestamp: now.getTime(),
-            },
-          ];
-          const oneHourAgo = now.getTime() - 60 * 60 * 1000;
-          return newHistory.filter((item) => item.fullTimestamp >= oneHourAgo);
-        });
-
-        // sensor2 히스토리 업데이트
-        setHistory2((prev) => {
-          const now = new Date();
-          const newHistory = [
-            ...prev,
-            {
-              ...processedData2,
-              timestamp: now.toLocaleTimeString(),
-              fullTimestamp: now.getTime(),
-            },
-          ];
-          const oneHourAgo = now.getTime() - 60 * 60 * 1000;
-          return newHistory.filter((item) => item.fullTimestamp >= oneHourAgo);
-        });
+              return {
+                ...device,
+                data: { temperature, humidity },
+                history: newHistory,
+              };
+            }
+            return device;
+          })
+        );
       } catch (e) {
         console.error("데이터 파싱 오류:", e);
         setError("데이터 형식 오류");
@@ -140,6 +137,50 @@ export default function RealtimePage() {
   // 재연결 핸들러
   const handleReconnect = () => {
     connectWebSocket();
+  };
+
+  // 장치 추가 핸들러
+  const handleAddDevice = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("http://localhost:8080/api/modbus/devices", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newDevice),
+      });
+
+      if (!response.ok) {
+        throw new Error("장치 추가 실패");
+      }
+
+      // 장치 목록에 추가
+      setDevices((prev) => [
+        ...prev,
+        {
+          id: newDevice.deviceId,
+          name: newDevice.name,
+          host: newDevice.host,
+          data: { temperature: 0, humidity: 0 },
+          history: [],
+          showTable: false,
+        },
+      ]);
+
+      // 폼 초기화
+      setNewDevice({
+        deviceId: "",
+        name: "",
+        host: "",
+        port: 502,
+        startAddress: 10,
+      });
+      setShowAddForm(false);
+      setError(null);
+    } catch (error) {
+      setError(error.message);
+    }
   };
 
   // 차트 옵션
@@ -189,181 +230,242 @@ export default function RealtimePage() {
     },
   };
 
-  // 차트 데이터 - sensor1
-  const chartData1 = {
-    labels: history1.map((item) => item.timestamp),
-    datasets: [
-      {
-        label: "온도 (°C) - 센서1",
-        data: history1.map((item) => item.temperature),
-        borderColor: "#FF8787",
-        backgroundColor: "rgba(255, 135, 135, 0.1)",
-        borderWidth: 2,
-        tension: 0.4,
-        fill: true,
-        pointRadius: 0,
-      },
-      {
-        label: "습도 (%) - 센서1",
-        data: history1.map((item) => item.humidity),
-        borderColor: "#74C0FC",
-        backgroundColor: "rgba(116, 192, 252, 0.1)",
-        borderWidth: 2,
-        tension: 0.4,
-        fill: true,
-        pointRadius: 0,
-      },
-    ],
-  };
-
-  // 차트 데이터 - sensor2
-  const chartData2 = {
-    labels: history2.map((item) => item.timestamp),
-    datasets: [
-      {
-        label: "온도 (°C) - 센서2",
-        data: history2.map((item) => item.temperature),
-        borderColor: "#FF9F87",
-        backgroundColor: "rgba(255, 159, 135, 0.1)",
-        borderWidth: 2,
-        tension: 0.4,
-        fill: true,
-        pointRadius: 0,
-      },
-      {
-        label: "습도 (%) - 센서2",
-        data: history2.map((item) => item.humidity),
-        borderColor: "#74E0FC",
-        backgroundColor: "rgba(116, 224, 252, 0.1)",
-        borderWidth: 2,
-        tension: 0.4,
-        fill: true,
-        pointRadius: 0,
-      },
-    ],
-  };
-
   return (
     <div className="realtime-container">
-      <h1>온도, 습도 실시간 조회</h1>
-
-      <div className="status-wrapper">
-        <span className="status-label">연결 상태:</span>
-        <span
-          className={`status-badge ${connected ? "connected" : "disconnected"}`}
-        >
-          {connected ? "연결됨" : "연결 안됨"}
-        </span>
+      <div className="header">
+        <h1>온도, 습도 실시간 조회</h1>
         <button
-          onClick={handleReconnect}
-          className="reconnect-button"
-          disabled={isConnecting}
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="add-device-button"
         >
-          {isConnecting ? "연결 중..." : "재연결"}
+          <span>+</span> 장치 추가
         </button>
       </div>
 
-      {/* 센서1 섹션 */}
-      <div className="sensor-section">
-        <h2>센서 1 (192.168.10.205)</h2>
-        <div className="current-values">
-          <div className="value-card">
-            <h3>현재 기온</h3>
-            <p className="value temperature">{data1.temperature}°C</p>
+      {error && <div className="error-message">{error}</div>}
+
+      <div className="devices-status">
+        {devices.map((device) => (
+          <div key={device.id} className="device-status">
+            <span className="device-name">{device.name}</span>
+            <span
+              className={`status-badge ${
+                connected ? "connected" : "disconnected"
+              }`}
+            >
+              {connected ? "연결됨" : "연결 안됨"}
+            </span>
+            <button
+              onClick={handleReconnect}
+              className="reconnect-button"
+              disabled={isConnecting}
+            >
+              {isConnecting ? "연결 중..." : "재연결"}
+            </button>
           </div>
-          <div className="value-card">
-            <h3>현재 습도</h3>
-            <p className="value humidity">{data1.humidity}%</p>
+        ))}
+      </div>
+
+      {showAddForm && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <form className="add-device-form" onSubmit={handleAddDevice}>
+              <div className="form-header">
+                <h3>새 장치 추가</h3>
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={() => setShowAddForm(false)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>장치 ID</label>
+                  <input
+                    type="text"
+                    placeholder="device1"
+                    value={newDevice.deviceId}
+                    onChange={(e) =>
+                      setNewDevice({ ...newDevice, deviceId: e.target.value })
+                    }
+                    required
+                  />
+                  <small>고유한 식별자</small>
+                </div>
+
+                <div className="form-group">
+                  <label>장치 이름</label>
+                  <input
+                    type="text"
+                    placeholder="온습도 센서 1"
+                    value={newDevice.name}
+                    onChange={(e) =>
+                      setNewDevice({ ...newDevice, name: e.target.value })
+                    }
+                    required
+                  />
+                  <small>표시될 이름</small>
+                </div>
+
+                <div className="form-group full-width">
+                  <label>호스트 주소</label>
+                  <input
+                    type="text"
+                    placeholder="192.168.0.100"
+                    value={newDevice.host}
+                    onChange={(e) =>
+                      setNewDevice({ ...newDevice, host: e.target.value })
+                    }
+                    required
+                  />
+                  <small>장치의 IP 주소</small>
+                </div>
+
+                <div className="form-group">
+                  <label>포트</label>
+                  <input
+                    type="number"
+                    placeholder="502"
+                    value={newDevice.port}
+                    onChange={(e) =>
+                      setNewDevice({
+                        ...newDevice,
+                        port: parseInt(e.target.value),
+                      })
+                    }
+                    required
+                  />
+                  <small>기본값: 502</small>
+                </div>
+
+                <div className="form-group">
+                  <label>시작 주소</label>
+                  <input
+                    type="number"
+                    placeholder="10"
+                    value={newDevice.startAddress}
+                    onChange={(e) =>
+                      setNewDevice({
+                        ...newDevice,
+                        startAddress: parseInt(e.target.value),
+                      })
+                    }
+                    required
+                  />
+                  <small>기본값: 10</small>
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button type="submit" className="submit-button">
+                  추가
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddForm(false)}
+                  className="cancel-button"
+                >
+                  취소
+                </button>
+              </div>
+            </form>
           </div>
         </div>
+      )}
 
-        <div className="chart-wrapper">
-          <Line data={chartData1} options={chartOptions} />
-        </div>
-
-        <button
-          onClick={() => setShowTable1(!showTable1)}
-          className="toggle-button"
-        >
-          {showTable1 ? "테이블 숨기기" : "테이블 보기"}
-        </button>
-
-        {showTable1 && (
-          <div className="table-container">
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>날짜/시간</th>
-                    <th>기온 (°C)</th>
-                    <th>습도 (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history1.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.timestamp}</td>
-                      <td>{item.temperature}</td>
-                      <td>{item.humidity}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {devices.map((device) => (
+        <div key={device.id} className="sensor-section">
+          <h2>
+            {device.name} ({device.host})
+          </h2>
+          <div className="current-values">
+            <div className="value-card">
+              <h3>현재 기온</h3>
+              <p className="value temperature">
+                {device.data.temperature.toFixed(1)}°C
+              </p>
+            </div>
+            <div className="value-card">
+              <h3>현재 습도</h3>
+              <p className="value humidity">
+                {device.data.humidity.toFixed(1)}%
+              </p>
             </div>
           </div>
-        )}
-      </div>
 
-      {/* 센서2 섹션 */}
-      <div className="sensor-section">
-        <h2>센서 2 (192.168.10.206)</h2>
-        <div className="current-values">
-          <div className="value-card">
-            <h3>현재 기온</h3>
-            <p className="value temperature">{data2.temperature}°C</p>
+          <div className="chart-wrapper">
+            <Line
+              data={{
+                labels: device.history.map((item) => item.timestamp),
+                datasets: [
+                  {
+                    label: `온도 (°C) - ${device.name}`,
+                    data: device.history.map((item) => item.temperature),
+                    borderColor: "#FF8787",
+                    backgroundColor: "rgba(255, 135, 135, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                  },
+                  {
+                    label: `습도 (%) - ${device.name}`,
+                    data: device.history.map((item) => item.humidity),
+                    borderColor: "#74C0FC",
+                    backgroundColor: "rgba(116, 192, 252, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                  },
+                ],
+              }}
+              options={chartOptions}
+            />
           </div>
-          <div className="value-card">
-            <h3>현재 습도</h3>
-            <p className="value humidity">{data2.humidity}%</p>
-          </div>
-        </div>
 
-        <div className="chart-wrapper">
-          <Line data={chartData2} options={chartOptions} />
-        </div>
+          <button
+            onClick={() => {
+              setDevices((prev) =>
+                prev.map((d) =>
+                  d.id === device.id ? { ...d, showTable: !d.showTable } : d
+                )
+              );
+            }}
+            className="toggle-button"
+          >
+            {device.showTable ? "테이블 숨기기" : "테이블 보기"}
+          </button>
 
-        <button
-          onClick={() => setShowTable2(!showTable2)}
-          className="toggle-button"
-        >
-          {showTable2 ? "테이블 숨기기" : "테이블 보기"}
-        </button>
-
-        {showTable2 && (
-          <div className="table-container">
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>날짜/시간</th>
-                    <th>기온 (°C)</th>
-                    <th>습도 (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history2.map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.timestamp}</td>
-                      <td>{item.temperature}</td>
-                      <td>{item.humidity}</td>
+          {device.showTable && (
+            <div className="table-container">
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>날짜/시간</th>
+                      <th>기온 (°C)</th>
+                      <th>습도 (%)</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {device.history.map((item, index) => (
+                      <tr key={index}>
+                        <td>{item.timestamp}</td>
+                        <td>{item.temperature}</td>
+                        <td>{item.humidity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

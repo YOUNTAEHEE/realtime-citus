@@ -59,6 +59,42 @@ export default function RealtimePage() {
     length: 2,
     slaveId: 1,
   });
+
+  useEffect(() => {
+    const fetchDevices = async () => {
+      try {
+        const response = await fetch(
+          "http://localhost:8080/api/modbus/device/list"
+        );
+        if (!response.ok) {
+          throw new Error("디바이스 목록 조회 실패");
+        }
+        const data = await response.json();
+
+        // 서버에서 받은 디바이스 데이터를 상태에 맞게 변환
+        const formattedDevices = data.devices.map((device) => ({
+          id: device.deviceId,
+          name: device.name,
+          host: device.host,
+          port: device.port,
+          slaveId: device.slaveId,
+          startAddress: device.startAddress,
+          length: device.length,
+          data: { temperature: 0, humidity: 0 },
+          history: [],
+          showTable: false,
+        }));
+
+        setDevices(formattedDevices);
+      } catch (error) {
+        console.error("디바이스 목록 조회 중 오류:", error);
+        setError("디바이스 목록을 불러오는데 실패했습니다.");
+      }
+    };
+
+    fetchDevices();
+  }, []);
+
   useEffect(() => {
     let socket = null;
 
@@ -323,6 +359,40 @@ export default function RealtimePage() {
     }
   };
 
+  // 장치 삭제 핸들러
+  const handleDeleteDevice = async (deviceId) => {
+    if (!window.confirm("정말로 이 장치를 삭제하시겠습니까?")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/modbus/device/${deviceId}`,
+        {
+          method: "DELETE",
+        }
+      );
+      if (response.ok) {
+        alert("장치 삭제 성공");
+      } else {
+        alert("장치 삭제 실패");
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "장치 삭제에 실패했습니다.");
+      }
+
+      setDevices((prevDevices) =>
+        prevDevices.filter((device) => device.id !== deviceId)
+      );
+      setError(null);
+    } catch (err) {
+      console.error("장치 삭제 중 오류 발생:", err);
+      setError(err.message);
+    }
+  };
+
   // 차트 옵션
   const chartOptions = {
     responsive: true,
@@ -387,21 +457,32 @@ export default function RealtimePage() {
       <div className="devices-status">
         {devices.map((device) => (
           <div key={device.id} className="device-status">
-            <span className="device-name">{device.name}</span>
-            <span
-              className={`status-badge ${
-                connected ? "connected" : "disconnected"
-              }`}
-            >
-              {connected ? "연결됨" : "연결 안됨"}
-            </span>
-            <button
-              onClick={handleReconnect}
-              className="reconnect-button"
-              disabled={isConnecting}
-            >
-              {isConnecting ? "연결 중..." : "재연결"}
-            </button>
+            <div className="device-info">
+              <span className="device-name">{device.name}</span>
+              <span
+                className={`status-badge ${
+                  connected ? "connected" : "disconnected"
+                }`}
+              >
+                {connected ? "연결됨" : "연결 안됨"}
+              </span>
+            </div>
+            <div className="device-actions">
+              <button
+                onClick={() => handleReconnect()}
+                className="action-button reconnect-button"
+                disabled={isConnecting}
+              >
+                {isConnecting ? "연결 중..." : "재연결"}
+              </button>
+              <button
+                onClick={() => handleDeleteDevice(device.id)}
+                className="action-button delete-button"
+                disabled={isConnecting}
+              >
+                삭제
+              </button>
+            </div>
           </div>
         ))}
       </div>

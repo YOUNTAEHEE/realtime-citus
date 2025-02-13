@@ -391,120 +391,94 @@
   }
 }
 
-.devices-status {
+.device-status {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
 
-  .device-status {
+  &:hover {
+    background-color: #f1f3f5;
+  }
+
+  .device-info {
     display: flex;
     align-items: center;
-    gap: 1rem;
-    padding: 0.75rem 1rem;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: all 0.2s ease;
-
-    &:hover {
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
-    }
+    gap: 12px;
 
     .device-name {
       font-weight: 500;
-      color: #495057;
-      min-width: 120px;
+      color: #343a40;
     }
 
     .status-badge {
-      padding: 0.25rem 0.75rem;
+      padding: 4px 10px;
       border-radius: 20px;
-      font-size: 0.875rem;
+      font-size: 13px;
       font-weight: 500;
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
 
       &.connected {
-        background: #d3f9d8;
-        color: #2b8a3e;
-
-        &::before {
-          content: "";
-          display: block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: #2b8a3e;
-        }
+        background-color: #37b24d;
+        color: white;
       }
 
       &.disconnected {
-        background: #ffe3e3;
-        color: #c92a2a;
-
-        &::before {
-          content: "";
-          display: block;
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          background-color: #c92a2a;
-        }
+        background-color: #f03e3e;
+        color: white;
       }
     }
+  }
 
-    .reconnect-button {
-      margin-left: auto;
-      padding: 0.5rem 1rem;
+  .device-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+
+    .action-button {
+      padding: 6px 16px;
       border: none;
       border-radius: 6px;
-      font-size: 0.875rem;
+      font-size: 13px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      background: #339af0;
-      color: white;
-
-      &::before {
-        content: "↻";
-        font-size: 1.1rem;
-        font-weight: bold;
-      }
-
-      &:hover:not(:disabled) {
-        background: #228be6;
-        transform: translateY(-1px);
-      }
-
-      &:active:not(:disabled) {
-        transform: translateY(0);
-      }
 
       &:disabled {
-        background: #e9ecef;
-        color: #adb5bd;
+        opacity: 0.6;
         cursor: not-allowed;
+      }
 
-        &::before {
-          animation: spin 1s linear infinite;
+      &.reconnect-button {
+        background-color: #339af0;
+        color: white;
+
+        &:hover:not(:disabled) {
+          background-color: #228be6;
+        }
+      }
+
+      &.delete-button {
+        background-color: #ff6b6b;
+        color: white;
+
+        &:hover:not(:disabled) {
+          background-color: #fa5252;
         }
       }
     }
   }
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.devices-status {
+  margin: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .modal-overlay {

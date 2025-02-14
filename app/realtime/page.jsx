@@ -96,11 +96,26 @@ export default function RealtimePage() {
   }, []);
 
   useEffect(() => {
+    const fetchHistoricalData = async (deviceId) => {
+      try {
+        const response = await fetch(
+          `http://localhost:8080/api/modbus/history/${deviceId}?hours=1`
+        );
+        if (!response.ok) {
+          throw new Error("히스토리 데이터 조회 실패");
+        }
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("히스토리 데이터 조회 중 오류:", error);
+        return [];
+      }
+    };
+
     let socket = null;
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
-        // 1. WebSocket 연결
         socket = new WebSocket("ws://localhost:8080/modbus");
 
         socket.onopen = async () => {
@@ -110,88 +125,72 @@ export default function RealtimePage() {
           setIsConnecting(false);
           setWs(socket);
 
-          // 2. 연결 성공 후 장치 정보 REST API로 전송
-          for (const device of devices) {
-            try {
-              const deviceInfo = {
-                deviceId: device.id,
-                name: device.name,
-                host: device.host,
-                port: device.port,
-                startAddress: device.startAddress,
-                length: device.length,
-                slaveId: device.slaveId,
-              };
+          // 1. 장치 등록 병렬 처리
+          const registrationPromises = devices.map(async (device) => {
+            const deviceInfo = {
+              deviceId: device.id,
+              name: device.name,
+              host: device.host,
+              port: device.port,
+              startAddress: device.startAddress,
+              length: device.length,
+              slaveId: device.slaveId,
+            };
 
-              const response = await fetch(
-                "http://localhost:8080/api/modbus/device",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(deviceInfo),
-                }
-              );
+            // 장치 등록과 히스토리 데이터 조회를 병렬로 처리
+            const [registrationResponse, historicalData] = await Promise.all([
+              fetch("http://localhost:8080/api/modbus/device", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(deviceInfo),
+              }),
+              fetchHistoricalData(device.id),
+            ]);
 
-              if (!response.ok) {
-                throw new Error(`장치 등록 실패: ${device.id}`);
-              }
-
-              console.log(`장치 등록 성공: ${device.id}`);
-            } catch (error) {
-              console.error("장치 정보 전송 실패:", error);
-              setError(`장치 ${device.id} 등록 실패: ${error.message}`);
+            if (!registrationResponse.ok) {
+              throw new Error(`장치 등록 실패: ${device.id}`);
             }
-          }
-        };
 
-        socket.onclose = (event) => {
-          console.log(`WebSocket 연결 종료: ${event.code} - ${event.reason}`);
-          setConnected(false);
+            // 히스토리 데이터 상태 업데이트
+            setDevices((prev) =>
+              prev.map((d) => {
+                if (d.id === device.id) {
+                  return {
+                    ...d,
+                    history: historicalData,
+                  };
+                }
+                return d;
+              })
+            );
 
-          if (!event.wasClean) {
-            console.log("비정상 종료. 5초 후 재연결...");
-            setTimeout(() => {
-              connect();
-            }, 5000);
-          }
-        };
+            return { success: true, deviceId: device.id };
+          });
 
-        socket.onerror = (error) => {
-          console.error("WebSocket 오류:", error);
-          setError("WebSocket 연결 오류가 발생했습니다.");
-          setIsConnecting(false);
+          await Promise.all(registrationPromises);
         };
 
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("서버로부터 받은 데이터:", data);
 
-            if (data.error) {
-              setError(data.error);
-              return;
-            }
-
-            setDevices((prev) =>
-              prev.map((device) => {
+            setDevices((prevDevices) =>
+              prevDevices.map((device) => {
                 if (device.id === data.deviceId) {
+                  const newData = {
+                    temperature: data.temperature,
+                    humidity: data.humidity,
+                    timestamp: new Date().toLocaleTimeString(),
+                    fullTimestamp: Date.now(),
+                  };
+
                   return {
                     ...device,
                     data: {
                       temperature: data.temperature,
                       humidity: data.humidity,
                     },
-                    history: [
-                      ...device.history,
-                      {
-                        temperature: data.temperature,
-                        humidity: data.humidity,
-                        timestamp: new Date().toLocaleTimeString(),
-                        fullTimestamp: Date.now(),
-                      },
-                    ].filter(
+                    history: [...device.history, newData].filter(
                       (item) =>
                         item.fullTimestamp >= Date.now() - 60 * 60 * 1000
                     ),
@@ -200,10 +199,23 @@ export default function RealtimePage() {
                 return device;
               })
             );
-          } catch (e) {
-            console.error("데이터 파싱 오류:", e);
-            setError("데이터 형식 오류");
+          } catch (error) {
+            console.error("데이터 처리 중 오류:", error);
           }
+        };
+
+        socket.onclose = (event) => {
+          console.log("WebSocket 연결 종료");
+          setConnected(false);
+          if (!event.wasClean) {
+            setTimeout(() => connect(), 5000);
+          }
+        };
+
+        socket.onerror = (error) => {
+          console.error("WebSocket 오류:", error);
+          setError("연결 오류가 발생했습니다.");
+          setIsConnecting(false);
         };
       }
     };
@@ -211,12 +223,11 @@ export default function RealtimePage() {
     connect();
 
     return () => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        console.log("컴포넌트 언마운트: WebSocket 연결 정상 종료");
-        socket.close(1000, "정상 종료");
+      if (socket) {
+        socket.close();
       }
     };
-  }, []);
+  }, [devices.length]);
 
   // 새 장치 추가 핸들러
   const handleAddDevice = async (e) => {

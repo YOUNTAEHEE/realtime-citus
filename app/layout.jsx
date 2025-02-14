@@ -1,7 +1,7 @@
 import localFont from "next/font/local";
+import Clock from "../component/clock/Clock";
 import "./globals.css";
 import "./home.scss";
-import Clock from "../component/clock/Clock";
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",

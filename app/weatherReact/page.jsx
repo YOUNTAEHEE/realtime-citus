@@ -10,7 +10,27 @@ import { BeatLoader } from "react-spinners";
 // import { Barchart1, Linechart } from "../../../commondata/chartsdata";
 // import PageHeader from "../../../layouts/layoutcomponents/pageheader";
 import "./weatherChart.scss";
-
+const WeatherMap = dynamic(
+  () => import("../../component/weatherMap/WeatherMap"),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        style={{
+          width: "100%",
+          height: "400px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          border: "1px solid #ddd",
+          borderRadius: "8px",
+        }}
+      >
+        지도를 불러오는 중...
+      </div>
+    ),
+  }
+);
 // Chart 컴포넌트를 dynamic import로 변경
 const Chart = dynamic(
   () =>
@@ -728,7 +748,7 @@ export default function WeatherReact() {
               )}
             </p>
           </div>
-
+          <WeatherMap />
           <div className="chart_container_wrap">
             <div className="chart_box">
               <div className="chart_header">
@@ -870,7 +890,6 @@ export default function WeatherReact() {
               </div>
             </div>
           </div>
-
           <button
             onClick={() => setShowTable(!showTable)}
             className="toggle-button"

@@ -96,21 +96,6 @@ export default function RealtimePage() {
   }, []);
 
   useEffect(() => {
-    const fetchHistoricalData = async (deviceId) => {
-      try {
-        const response = await fetch(
-          `http://localhost:8080/api/modbus/history/${deviceId}?hours=1`
-        );
-        if (!response.ok) {
-          throw new Error("히스토리 데이터 조회 실패");
-        }
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error("히스토리 데이터 조회 중 오류:", error);
-        return [];
-      }
-    };
 
     let socket = null;
 
@@ -125,7 +110,7 @@ export default function RealtimePage() {
           setIsConnecting(false);
           setWs(socket);
 
-          // 1. 장치 등록 병렬 처리
+          // 장치 등록만 병렬로 처리
           const registrationPromises = devices.map(async (device) => {
             const deviceInfo = {
               deviceId: device.id,
@@ -137,32 +122,18 @@ export default function RealtimePage() {
               slaveId: device.slaveId,
             };
 
-            // 장치 등록과 히스토리 데이터 조회를 병렬로 처리
-            const [registrationResponse, historicalData] = await Promise.all([
-              fetch("http://localhost:8080/api/modbus/device", {
+            const response = await fetch(
+              "http://localhost:8080/api/modbus/device",
+              {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(deviceInfo),
-              }),
-              fetchHistoricalData(device.id),
-            ]);
+              }
+            );
 
-            if (!registrationResponse.ok) {
+            if (!response.ok) {
               throw new Error(`장치 등록 실패: ${device.id}`);
             }
-
-            // 히스토리 데이터 상태 업데이트
-            setDevices((prev) =>
-              prev.map((d) => {
-                if (d.id === device.id) {
-                  return {
-                    ...d,
-                    history: historicalData,
-                  };
-                }
-                return d;
-              })
-            );
 
             return { success: true, deviceId: device.id };
           });

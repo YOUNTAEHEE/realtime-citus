@@ -322,11 +322,19 @@ export const Barchart2 = {
   },
 };
 export default function WeatherReact() {
+  // const [selectedPosition, setSelectedPosition] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const [date_temp_search, setDate_temp_search] = useState("");
   const [temp_search, setTemp_search] = useState("high_temp");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState("119");
+  const [stationOptions, setStationOptions] = useState([
+    { stnId: "108", stnName: "서울" },
+    { stnId: "119", stnName: "수원" },
+    { stnId: "112", stnName: "인천" },
+    { stnId: "100", stnName: "대관령" },
+    { stnId: "101", stnName: "춘천" },
+  ]);
   const [isSearch, setIsSearch] = useState(false);
   const [totalData, setTotalData] = useState([]);
   const [showTable, setShowTable] = useState(false);
@@ -380,6 +388,35 @@ export default function WeatherReact() {
   // 각 차트의 타입을 관리하는 state 추가
   const [chart1Type, setChart1Type] = useState("line");
   const [chart2Type, setChart2Type] = useState("line");
+
+  // WeatherMap에서 선택된 관측소 추가
+  const handleStationSelect = (stationData) => {
+    if (stationData && stationData.stnId) {
+      console.log("✅ 선택된 관측소 데이터:", stationData); // 🚀 선택된 값 출력 (디버깅)
+
+      setSelectedRegion(stationData.stnId); // 선택한 관측소 ID 저장
+
+      setStationOptions((prevOptions) => {
+        const exists = prevOptions.some(
+          (opt) => opt.stnId === stationData.stnId
+        );
+
+        if (!exists) {
+          console.log("🔄 새로운 관측소 추가됨:", stationData); // 🚀 새로운 값 추가 확인
+          return [
+            ...prevOptions,
+            { stnId: stationData.stnId, stnName: stationData.stnName },
+          ];
+        } else {
+          console.log("⚠️ 이미 존재하는 관측소:", stationData.stnId); // 🚀 중복 방지 확인
+          return prevOptions; // 중복 방지
+        }
+      });
+    }
+  };
+  useEffect(() => {
+    console.log("🚀 관측소 목록 변경됨:", stationOptions);
+  }, [stationOptions]); // ✅ `stationOptions` 변경될 때마다 콘솔 출력
 
   const formatAPIDate = (date) => {
     console.log("date", date);
@@ -670,11 +707,11 @@ export default function WeatherReact() {
               value={selectedRegion}
               disabled={isLoading}
             >
-              <option value="108">서울</option>
-              <option value="119">수원</option>
-              <option value="112">인천</option>
-              <option value="100">대관령</option>
-              <option value="101">춘천</option>
+              {stationOptions.map((station) => (
+                <option key={station.stnId} value={station.stnId}>
+                  {station.stnName}
+                </option>
+              ))}
             </select>
             <input
               type="date"
@@ -748,7 +785,10 @@ export default function WeatherReact() {
               )}
             </p>
           </div>
-          <WeatherMap />
+          <WeatherMap
+            onStationNumberSelect={handleStationSelect}
+            // selectedPosition={selectedRegion}
+          />
           <div className="chart_container_wrap">
             <div className="chart_box">
               <div className="chart_header">

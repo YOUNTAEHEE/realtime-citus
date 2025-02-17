@@ -1,10 +1,41 @@
 "use client";
+import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import "./weatherMap.scss";
 
-export default function WeatherMap() {
+export default function WeatherMap({ onStationNumberSelect }) {
   const mapContainer = useRef(null);
   const [clickPosition, setClickPosition] = useState(null);
+  const [weatherData, setWeatherData] = useState(null);
+  const [error, setError] = useState(null);
+  const fetchWeatherData = async (lat, lng) => {
+    try {
+      if (!lat || !lng) return;
+      console.log("요청 보낼 위도:", lat, "경도:", lng); // 디버깅 로그 추가
+     
+     
+      const response = await axios.get(
+        "http://localhost:8080/api/stations/nearest",
+        {
+          params: {
+            lat: lat,
+            lng: lng,
+          },
+        }
+      );
+
+      console.log("API 응답:", response.data);
+      setWeatherData(response.data);
+      // 지점 번호 추출 및 부모 컴포넌트로 전달
+      if (response.data && response.data.stnId) {
+        onStationNumberSelect(response.data);
+      }
+      setError(null);
+    } catch (error) {
+      console.error("날씨 데이터 조회 실패:", error);
+      setError("날씨 데이터를 가져오는데 실패했습니다.");
+    }
+  };
 
   useEffect(() => {
     const loadKakaoMapScript = () => {
@@ -56,10 +87,13 @@ export default function WeatherMap() {
           marker.setPosition(latlng);
 
           // 클릭 위치 상태 업데이트
-          setClickPosition({
-            lat: latlng.getLat(),
-            lng: latlng.getLng(),
-          });
+          const newPosition = {
+            lat: latlng.getLat().toFixed(8), // Math.floor로 정수 변환
+            lng: latlng.getLng().toFixed(8),
+          };
+          setClickPosition(newPosition); // 내부 상태 업데이트
+
+          fetchWeatherData(newPosition.lat, newPosition.lng);
         });
 
         console.log("지도 초기화 완료");
@@ -80,6 +114,7 @@ export default function WeatherMap() {
     };
   }, []);
 
+
   return (
     <div className="map_wrap">
       <h3 className="map_title">관측소 위치</h3>
@@ -97,8 +132,8 @@ export default function WeatherMap() {
       {clickPosition && (
         <div className="click-position">
           <p>
-            선택한 위치 - 위도: {clickPosition.lat.toFixed(6)}, 경도:{" "}
-            {clickPosition.lng.toFixed(6)}
+            선택한 위치 - 위도: {clickPosition.lat}, 경도:
+            {clickPosition.lng}
           </p>
         </div>
       )}

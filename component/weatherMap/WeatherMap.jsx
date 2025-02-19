@@ -117,7 +117,7 @@ export default function WeatherMap({ onStationNumberSelect }) {
 
   return (
     <div className="map_wrap">
-      <h3 className="map_title">관측소 위치</h3>
+      <h3 className="map_title">관측소 위치 선택</h3>
       <div
         ref={mapContainer}
         style={{

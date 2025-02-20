@@ -96,7 +96,6 @@ export default function RealtimePage() {
   }, []);
 
   useEffect(() => {
-
     let socket = null;
 
     const connect = async () => {
@@ -154,6 +153,14 @@ export default function RealtimePage() {
                     timestamp: new Date().toLocaleTimeString(),
                     fullTimestamp: Date.now(),
                   };
+
+                  // **이전 데이터 가져오기**
+                  const lastEntry = device.history[device.history.length - 1];
+
+                  // **같은 시간(초 단위)이면 저장하지 않음**
+                  if (lastEntry && lastEntry.timestamp === newData.timestamp) {
+                    return device; // 같은 시간이라면 추가하지 않음
+                  }
 
                   return {
                     ...device,

@@ -600,3 +600,30 @@
     }
   }
 }
+.value-container {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.normal {
+  background-color: #4caf50; /* 초록색 */
+  box-shadow: 0 0 4px #4caf50;
+}
+
+.status-dot.warning {
+  background-color: #ffc107; /* 노란색 */
+  box-shadow: 0 0 4px #ffc107;
+}
+
+.status-dot.danger {
+  background-color: #f44336; /* 빨간색 */
+  box-shadow: 0 0 4px #f44336;
+}

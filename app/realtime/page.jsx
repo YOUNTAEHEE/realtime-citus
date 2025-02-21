@@ -428,7 +428,35 @@ export default function RealtimePage() {
       },
     },
   };
+  const getTemperatureStatus = (temp) => {
+    if (temp >= 30) return "danger";
+    if (temp >= 27) return "warning";
+    if (temp <= 10) return "danger";
+    if (temp <= 15) return "warning";
+    return "normal";
+  };
 
+  const getHumidityStatus = (humidity) => {
+    if (humidity >= 70) return 'danger';  // 🌫️ 매우 습함 (위험)
+    if (humidity >= 60) return 'warning'; // 💦 다소 습함 (주의)
+    if (humidity >= 40) return 'normal';  // ✅ 정상 (40~60% 범위)
+    if (humidity >= 30) return 'warning'; // 🍂 조금 건조 (주의)
+    return 'danger';  // 🌵 매우 건조 (위험)
+  };
+  
+
+  const getStatusText = (status) => {
+    switch (status) {
+      case "normal":
+        return "정상";
+      case "warning":
+        return "주의";
+      case "danger":
+        return "경고";
+      default:
+        return "알 수 없음";
+    }
+  };
   return (
     <div className="realtime-container">
       <div className="header">
@@ -628,15 +656,27 @@ export default function RealtimePage() {
           <div className="current-values">
             <div className="value-card">
               <h3>현재 기온</h3>
-              <p className="value temperature">
-                {device.data.temperature.toFixed(1)}°C
-              </p>
+              <div className="value-container">
+                <p className="value temperature">
+                  {device.data.temperature.toFixed(1)}°C
+                </p>
+                <div
+                  className={`status-dot ${getTemperatureStatus(device.data.temperature)}`}
+                  title={`온도 상태: ${getStatusText(getTemperatureStatus(device.data.temperature))}`}
+                />
+              </div>
             </div>
             <div className="value-card">
               <h3>현재 습도</h3>
-              <p className="value humidity">
-                {device.data.humidity.toFixed(1)}%
-              </p>
+              <div className="value-container">
+                <p className="value humidity">
+                  {device.data.humidity.toFixed(1)}%
+                </p>
+                <div
+                  className={`status-dot ${getHumidityStatus(device.data.humidity)}`}
+                  title={`습도 상태: ${getStatusText(getHumidityStatus(device.data.humidity))}`}
+                />
+              </div>
             </div>
           </div>
 

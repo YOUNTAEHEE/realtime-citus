@@ -31,6 +31,14 @@ const WeatherMap = dynamic(
     ),
   }
 );
+
+const FutureWeather = dynamic(
+  () => import("../../component/futureWeather/FutureWeather"),
+  {
+    ssr: false,
+    loading: () => <BeatLoader color="#b19ae0" />,
+  }
+);
 // Chart 컴포넌트를 dynamic import로 변경
 const Chart = dynamic(
   () =>
@@ -859,7 +867,7 @@ export default function WeatherReact() {
                 )}
               </div>
             </div>
-
+            {/* <FutureWeather /> */}
             <div className="chart_box">
               <div className="chart_header">
                 <h3 className="chart_title">풍속 & 풍향</h3>

@@ -12,8 +12,8 @@ import {
 } from "chart.js";
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
+import { IoMdSettings } from "react-icons/io";
 import "./realtime.scss";
-
 // Chart.js 등록
 ChartJS.register(
   CategoryScale,
@@ -31,6 +31,8 @@ const Line = dynamic(() => import("react-chartjs-2").then((mod) => mod.Line), {
 });
 
 export default function RealtimePage() {
+  const [loading, setLoading] = useState(true);
+  const [showSettingForm, setShowSettingForm] = useState(false);
   const [devices, setDevices] = useState([
     {
       id: "Modbus1",
@@ -59,6 +61,24 @@ export default function RealtimePage() {
     length: 2,
     slaveId: 1,
   });
+  const [settings, setSettings] = useState({
+    temperature: {
+      warningLow: 15,
+      dangerLow: 10,
+      normal: 23,
+      warningHigh: 27,
+      dangerHigh: 30,
+    },
+    humidity: {
+      warningLow: 30,
+      dangerLow: 20,
+      normal: 50,
+      warningHigh: 60,
+      dangerHigh: 70,
+    },
+  });
+  const [wsConnected, setWsConnected] = useState(false);
+  const [modbusActive, setModbusActive] = useState({}); // 장치별 모드버스 활성 상태
 
   useEffect(() => {
     const fetchDevices = async () => {
@@ -96,7 +116,64 @@ export default function RealtimePage() {
   }, []);
 
   useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("http://localhost:8080/api/modbus/settings");
+      if (!response.ok) {
+        throw new Error("설정값 로드 실패");
+      }
+      const data = await response.json();
+      setSettings(
+        data || {
+          temperature: {
+            warningLow: 15,
+            dangerLow: 10,
+            normal: 23,
+            warningHigh: 27,
+            dangerHigh: 30,
+          },
+          humidity: {
+            warningLow: 30,
+            dangerLow: 20,
+            normal: 50,
+            warningHigh: 60,
+            dangerHigh: 70,
+          },
+        }
+      );
+    } catch (err) {
+      console.error("설정값 로드 중 오류:", err);
+      setError(err.message);
+      setSettings({
+        // 에러 발생 시 기본값 설정
+        temperature: {
+          warningLow: 15,
+          dangerLow: 10,
+          normal: 23,
+          warningHigh: 27,
+          dangerHigh: 30,
+        },
+        humidity: {
+          warningLow: 30,
+          dangerLow: 20,
+          normal: 50,
+          warningHigh: 60,
+          dangerHigh: 70,
+        },
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
     let socket = null;
+    let lastDataTime = {}; // 장치별 마지막 데이터 수신 시간
+    let checkInterval = null; // 데이터 수신 체크 인터벌
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
@@ -104,7 +181,7 @@ export default function RealtimePage() {
 
         socket.onopen = async () => {
           console.log("WebSocket 연결됨");
-          setConnected(true);
+          setWsConnected(true);
           setError(null);
           setIsConnecting(false);
           setWs(socket);
@@ -137,12 +214,55 @@ export default function RealtimePage() {
             return { success: true, deviceId: device.id };
           });
 
-          await Promise.all(registrationPromises);
+          try {
+            await Promise.all(registrationPromises);
+          } catch (error) {
+            console.error("장치 등록 중 오류:", error);
+            setError("일부 장치 등록에 실패했습니다.");
+          }
+
+          // 모드버스 데이터 수신 체크 인터벌 설정
+          checkInterval = setInterval(() => {
+            const now = Date.now();
+            console.log("인터벌 체크 실행", lastDataTime); // 디버깅용 로그 추가
+
+            devices.forEach((device) => {
+              // 5초 이상 데이터가 수신되지 않으면 비활성으로 간주 (10초에서 5초로 변경)
+              const isActive =
+                lastDataTime[device.id] && now - lastDataTime[device.id] < 5000;
+              console.log(
+                `장치 ${device.id} 상태:`,
+                isActive,
+                "마지막 데이터:",
+                lastDataTime[device.id]
+              ); // 디버깅용 로그 추가
+
+              setModbusActive((prev) => {
+                if (prev[device.id] !== isActive) {
+                  console.log(`장치 ${device.id} 상태 변경:`, isActive); // 디버깅용 로그 추가
+                }
+                return { ...prev, [device.id]: isActive };
+              });
+            });
+          }, 1000); // 2초에서 1초로 변경
         };
 
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+
+            // 데이터 수신 시간 업데이트 및 상태 변경
+            console.log("데이터 수신:", data.deviceId); // 디버깅용 로그 추가
+            lastDataTime[data.deviceId] = Date.now();
+
+            // 상태 업데이트를 즉시 반영
+            setModbusActive((prev) => {
+              console.log("모드버스 상태 업데이트:", {
+                ...prev,
+                [data.deviceId]: true,
+              }); // 디버깅용 로그 추가
+              return { ...prev, [data.deviceId]: true };
+            });
 
             setDevices((prevDevices) =>
               prevDevices.map((device) => {
@@ -154,12 +274,12 @@ export default function RealtimePage() {
                     fullTimestamp: Date.now(),
                   };
 
-                  // **이전 데이터 가져오기**
+                  // 이전 데이터 가져오기
                   const lastEntry = device.history[device.history.length - 1];
 
-                  // **같은 시간(초 단위)이면 저장하지 않음**
+                  // 같은 시간(초 단위)이면 저장하지 않음
                   if (lastEntry && lastEntry.timestamp === newData.timestamp) {
-                    return device; // 같은 시간이라면 추가하지 않음
+                    return device;
                   }
 
                   return {
@@ -184,7 +304,14 @@ export default function RealtimePage() {
 
         socket.onclose = (event) => {
           console.log("WebSocket 연결 종료");
-          setConnected(false);
+          setWsConnected(false);
+          setModbusActive({}); // 모든 장치 비활성화
+
+          if (checkInterval) {
+            clearInterval(checkInterval);
+            checkInterval = null;
+          }
+
           if (!event.wasClean) {
             setTimeout(() => connect(), 5000);
           }
@@ -203,6 +330,9 @@ export default function RealtimePage() {
     return () => {
       if (socket) {
         socket.close();
+      }
+      if (checkInterval) {
+        clearInterval(checkInterval);
       }
     };
   }, [devices.length]);
@@ -289,7 +419,7 @@ export default function RealtimePage() {
 
       socket.onopen = async () => {
         console.log("WebSocket 재연결 성공");
-        setConnected(true);
+        setWsConnected(true);
         setWs(socket);
         setError(null);
 
@@ -329,7 +459,7 @@ export default function RealtimePage() {
 
       socket.onclose = (event) => {
         console.log("WebSocket 재연결 실패");
-        setConnected(false);
+        setWsConnected(false);
         setIsConnecting(false);
         if (!event.wasClean) {
           setError("연결이 비정상적으로 종료되었습니다.");
@@ -429,21 +559,37 @@ export default function RealtimePage() {
     },
   };
   const getTemperatureStatus = (temp) => {
-    if (temp >= 30) return "danger";
-    if (temp >= 27) return "warning";
-    if (temp <= 10) return "danger";
-    if (temp <= 15) return "warning";
-    return "normal";
+    const temperature = settings?.temperature || {};
+
+    if (temp >= temperature.dangerHigh) return "danger";
+    if (temp >= temperature.warningHigh) return "warning";
+    if (temp <= temperature.dangerLow) return "danger";
+    if (temp <= temperature.warningLow) return "warning";
+
+    // 명시적으로 normal 범위 정의
+    if (temp > temperature.warningLow && temp < temperature.warningHigh)
+      return "normal";
+
+    return "unknown"; // 혹시 모를 예외 상황 대비
   };
 
   const getHumidityStatus = (humidity) => {
-    if (humidity >= 70) return 'danger';  // 🌫️ 매우 습함 (위험)
-    if (humidity >= 60) return 'warning'; // 💦 다소 습함 (주의)
-    if (humidity >= 40) return 'normal';  // ✅ 정상 (40~60% 범위)
-    if (humidity >= 30) return 'warning'; // 🍂 조금 건조 (주의)
-    return 'danger';  // 🌵 매우 건조 (위험)
+    const humiditySettings = settings?.humidity || {};
+
+    if (humidity >= humiditySettings.dangerHigh) return "danger";
+    if (humidity >= humiditySettings.warningHigh) return "warning";
+    if (humidity <= humiditySettings.dangerLow) return "danger";
+    if (humidity <= humiditySettings.warningLow) return "warning";
+
+    // 명시적으로 normal 범위 정의
+    if (
+      humidity > humiditySettings.warningLow &&
+      humidity < humiditySettings.warningHigh
+    )
+      return "normal";
+
+    return "unknown"; // 혹시 모를 예외 상황 대비
   };
-  
 
   const getStatusText = (status) => {
     switch (status) {
@@ -457,16 +603,64 @@ export default function RealtimePage() {
         return "알 수 없음";
     }
   };
+
+  // 설정 변경 핸들러 추가
+  const handleSettingChange = (type, level, value) => {
+    setSettings((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [level]: Number(value),
+      },
+    }));
+  };
+
+  // 설정 저장 핸들러
+  const handleSettingSave = async (e) => {
+    e.preventDefault();
+    // TODO: 설정 저장 API 호출
+    try {
+      const response = await fetch(
+        "http://localhost:8080/api/modbus/settings",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(settings),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("설정 저장 실패");
+      }
+
+      setShowSettingForm(false);
+      setError(null);
+    } catch (err) {
+      console.error("설정 저장 중 오류 발생:", err);
+      setError(err.message);
+    }
+  };
+
   return (
     <div className="realtime-container">
       <div className="header">
         <h1>온도, 습도 실시간 조회</h1>
-        <button
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="add-device-button"
-        >
-          <span>+</span> 장치 추가
-        </button>
+        <div className="header-button-box">
+          <button
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="add-device-button"
+          >
+            <span>+</span> 장치 추가
+          </button>
+          <button
+            className="setting-button"
+            onClick={() => setShowSettingForm(!showSettingForm)}
+          >
+            <IoMdSettings />
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -476,13 +670,20 @@ export default function RealtimePage() {
           <div key={device.id} className="device-status">
             <div className="device-info">
               <span className="device-name">{device.name}</span>
-              <span
-                className={`status-badge ${
-                  connected ? "connected" : "disconnected"
-                }`}
-              >
-                {connected ? "연결됨" : "연결 안됨"}
-              </span>
+              <div className="status-badges">
+                <span
+                  className={`status-badge ${wsConnected ? "connected" : "disconnected"}`}
+                >
+                  {wsConnected ? "웹소켓 연결됨" : "웹소켓 연결 안됨"}
+                </span>
+                <span
+                  className={`status-badge ${modbusActive[device.id] ? "active" : "inactive"}`}
+                >
+                  {modbusActive[device.id]
+                    ? "데이터 수신 중"
+                    : "데이터 수신 안됨"}
+                </span>
+              </div>
             </div>
             <div className="device-actions">
               <button
@@ -648,108 +849,305 @@ export default function RealtimePage() {
         </div>
       )}
 
-      {devices.map((device) => (
-        <div key={device.id} className="sensor-section">
-          <h2>
-            {device.name} ({device.host})
-          </h2>
-          <div className="current-values">
-            <div className="value-card">
-              <h3>현재 기온</h3>
-              <div className="value-container">
-                <p className="value temperature">
-                  {device.data.temperature.toFixed(1)}°C
-                </p>
-                <div
-                  className={`status-dot ${getTemperatureStatus(device.data.temperature)}`}
-                  title={`온도 상태: ${getStatusText(getTemperatureStatus(device.data.temperature))}`}
-                />
+      {showSettingForm && (
+        <div className="modal-overlay">
+          <div className="modal-content settings-modal">
+            <form className="settings-form" onSubmit={handleSettingSave}>
+              <div className="form-header">
+                <h3>경고 기준값 설정</h3>
+                <button
+                  type="button"
+                  className="close-button"
+                  onClick={() => setShowSettingForm(false)}
+                >
+                  ×
+                </button>
               </div>
-            </div>
-            <div className="value-card">
-              <h3>현재 습도</h3>
-              <div className="value-container">
-                <p className="value humidity">
-                  {device.data.humidity.toFixed(1)}%
-                </p>
-                <div
-                  className={`status-dot ${getHumidityStatus(device.data.humidity)}`}
-                  title={`습도 상태: ${getStatusText(getHumidityStatus(device.data.humidity))}`}
-                />
+
+              <div className="settings-grid">
+                <div className="settings-section">
+                  <h4>온도 설정 (°C)</h4>
+                  <div className="settings-inputs">
+                    <div className="input-group danger">
+                      <label>저온 위험</label>
+                      <input
+                        type="number"
+                        value={settings.temperature.dangerLow}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "temperature",
+                            "dangerLow",
+                            e.target.value
+                          )
+                        }
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="input-group warning">
+                      <label>저온 경고</label>
+                      <input
+                        type="number"
+                        value={settings.temperature.warningLow}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "temperature",
+                            "warningLow",
+                            e.target.value
+                          )
+                        }
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="input-group normal">
+                      <label>정상</label>
+                      <input
+                        type="number"
+                        value={settings.temperature.normal}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "temperature",
+                            "normal",
+                            e.target.value
+                          )
+                        }
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="input-group warning">
+                      <label>고온 경고</label>
+                      <input
+                        type="number"
+                        value={settings.temperature.warningHigh}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "temperature",
+                            "warningHigh",
+                            e.target.value
+                          )
+                        }
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="input-group danger">
+                      <label>고온 위험</label>
+                      <input
+                        type="number"
+                        value={settings.temperature.dangerHigh}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "temperature",
+                            "dangerHigh",
+                            e.target.value
+                          )
+                        }
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="settings-section">
+                  <h4>습도 설정 (%)</h4>
+                  <div className="settings-inputs">
+                    <div className="input-group danger">
+                      <label>저습 위험</label>
+                      <input
+                        type="number"
+                        value={settings.humidity.dangerLow}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "humidity",
+                            "dangerLow",
+                            e.target.value
+                          )
+                        }
+                        step="1"
+                      />
+                    </div>
+                    <div className="input-group warning">
+                      <label>저습 경고</label>
+                      <input
+                        type="number"
+                        value={settings.humidity.warningLow}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "humidity",
+                            "warningLow",
+                            e.target.value
+                          )
+                        }
+                        step="1"
+                      />
+                    </div>
+                    <div className="input-group normal">
+                      <label>정상</label>
+                      <input
+                        type="number"
+                        value={settings.humidity.normal}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "humidity",
+                            "normal",
+                            e.target.value
+                          )
+                        }
+                        step="1"
+                      />
+                    </div>
+                    <div className="input-group warning">
+                      <label>고습 경고</label>
+                      <input
+                        type="number"
+                        value={settings.humidity.warningHigh}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "humidity",
+                            "warningHigh",
+                            e.target.value
+                          )
+                        }
+                        step="1"
+                      />
+                    </div>
+                    <div className="input-group danger">
+                      <label>고습 위험</label>
+                      <input
+                        type="number"
+                        value={settings.humidity.dangerHigh}
+                        onChange={(e) =>
+                          handleSettingChange(
+                            "humidity",
+                            "dangerHigh",
+                            e.target.value
+                          )
+                        }
+                        step="1"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              <div className="form-actions">
+                <button type="submit" className="submit-button">
+                  저장
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSettingForm(false)}
+                  className="cancel-button"
+                >
+                  취소
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div className="chart-wrapper">
-            <Line
-              data={{
-                labels: device.history.map((item) => item.timestamp),
-                datasets: [
-                  {
-                    label: `온도 (°C) - ${device.name}`,
-                    data: device.history.map((item) => item.temperature),
-                    borderColor: "#FF8787",
-                    backgroundColor: "rgba(255, 135, 135, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true,
-                    pointRadius: 0,
-                  },
-                  {
-                    label: `습도 (%) - ${device.name}`,
-                    data: device.history.map((item) => item.humidity),
-                    borderColor: "#74C0FC",
-                    backgroundColor: "rgba(116, 192, 252, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true,
-                    pointRadius: 0,
-                  },
-                ],
-              }}
-              options={chartOptions}
-            />
-          </div>
-
-          <button
-            onClick={() => {
-              setDevices((prev) =>
-                prev.map((d) =>
-                  d.id === device.id ? { ...d, showTable: !d.showTable } : d
-                )
-              );
-            }}
-            className="toggle-button"
-          >
-            {device.showTable ? "테이블 숨기기" : "테이블 보기"}
-          </button>
-
-          {device.showTable && (
-            <div className="table-container">
-              <div className="table-wrapper">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>날짜/시간</th>
-                      <th>기온 (°C)</th>
-                      <th>습도 (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {device.history.map((item, index) => (
-                      <tr key={index}>
-                        <td>{item.timestamp}</td>
-                        <td>{item.temperature}</td>
-                        <td>{item.humidity}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
         </div>
-      ))}
+      )}
+      <div className="sensor-container">
+        {devices.map((device) => (
+          <div key={device.id} className="sensor-section">
+            <h2>
+              {device.name} ({device.host})
+            </h2>
+            <div className="current-values">
+              <div className="value-card">
+                <h3>현재 기온</h3>
+                <div className="value-container">
+                  <p className="value temperature">
+                    {device.data.temperature.toFixed(1)}°C
+                  </p>
+                  <div
+                    className={`status-dot ${getTemperatureStatus(device.data.temperature)}`}
+                    title={`온도 상태: ${getStatusText(getTemperatureStatus(device.data.temperature))}`}
+                  />
+                </div>
+              </div>
+              <div className="value-card">
+                <h3>현재 습도</h3>
+                <div className="value-container">
+                  <p className="value humidity">
+                    {device.data.humidity.toFixed(1)}%
+                  </p>
+                  <div
+                    className={`status-dot ${getHumidityStatus(device.data.humidity)}`}
+                    title={`습도 상태: ${getStatusText(getHumidityStatus(device.data.humidity))}`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="chart-wrapper">
+              <Line
+                data={{
+                  labels: device.history.map((item) => item.timestamp),
+                  datasets: [
+                    {
+                      label: `온도 (°C) - ${device.name}`,
+                      data: device.history.map((item) => item.temperature),
+                      borderColor: "#FF8787",
+                      backgroundColor: "rgba(255, 135, 135, 0.1)",
+                      borderWidth: 2,
+                      tension: 0.4,
+                      fill: true,
+                      pointRadius: 0,
+                    },
+                    {
+                      label: `습도 (%) - ${device.name}`,
+                      data: device.history.map((item) => item.humidity),
+                      borderColor: "#74C0FC",
+                      backgroundColor: "rgba(116, 192, 252, 0.1)",
+                      borderWidth: 2,
+                      tension: 0.4,
+                      fill: true,
+                      pointRadius: 0,
+                    },
+                  ],
+                }}
+                options={chartOptions}
+              />
+            </div>
+
+            <button
+              onClick={() => {
+                setDevices((prev) =>
+                  prev.map((d) =>
+                    d.id === device.id ? { ...d, showTable: !d.showTable } : d
+                  )
+                );
+              }}
+              className="toggle-button"
+            >
+              {device.showTable ? "테이블 숨기기" : "테이블 보기"}
+            </button>
+
+            {device.showTable && (
+              <div className="table-container">
+                <div className="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>날짜/시간</th>
+                        <th>기온 (°C)</th>
+                        <th>습도 (%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {device.history.map((item, index) => (
+                        <tr key={index}>
+                          <td>{item.timestamp}</td>
+                          <td>{item.temperature}</td>
+                          <td>{item.humidity}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

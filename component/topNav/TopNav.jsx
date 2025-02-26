@@ -12,7 +12,7 @@ export default function TopNav() {
     } else if (type === "weatherpage") {
       router.push("/weatherpage");
     } else if (type === "weatherReact") {
-      router.push("/weatherReact");
+      router.push("/twoWeather");
     } else if (type === "realtime") {
       router.push("/realtime");
     }

@@ -15,6 +15,8 @@ export default function TopNav() {
       router.push("/twoWeather");
     } else if (type === "realtime") {
       router.push("/realtime");
+    } else if (type === "realtime2") {
+      router.push("/realtime2");
     }
   };
   return (
@@ -58,6 +60,13 @@ export default function TopNav() {
         onClick={() => handleTopNavClick("realtime")}
       >
         실시간(Modbus)
+      </div>
+      <span>|</span>
+      <div
+        className={`top_nav_title ${choice_top_nav === "realtime2" ? "on" : ""}`}
+        onClick={() => handleTopNavClick("realtime2")}
+      >
+        실시간2(DB쿼리)
       </div>
     </div>
   );

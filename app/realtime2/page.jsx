@@ -1,5 +1,4 @@
 "use client";
-
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -13,6 +12,7 @@ import {
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { IoMdSettings } from "react-icons/io";
+import Plot from "react-plotly.js";
 import "./realtime.scss";
 // Chart.js 등록
 ChartJS.register(
@@ -312,8 +312,8 @@ export default function RealtimePage() {
                   const newData = {
                     temperature: data.temperature,
                     humidity: data.humidity,
-                    timestamp: new Date().toLocaleTimeString(),
-                    fullTimestamp: Date.now(),
+                    // ISO 문자열 형식으로 timestamp 저장
+                    timestamp: new Date().toISOString(),
                   };
 
                   // // 이전 데이터 가져오기
@@ -333,13 +333,6 @@ export default function RealtimePage() {
                       temperature: data.temperature,
                       humidity: data.humidity,
                     },
-                    // history: [
-                    //   ...(Array.isArray(device?.history) ? device.history : []),
-                    //   newData,
-                    // ].filter(
-                    //   (item) =>
-                    //     item.fullTimestamp >= Date.now() - 60 * 60 * 1000
-                    // ),
                     history: [...(device.history || []), newData].slice(-86400),
                   };
                 }
@@ -1316,37 +1309,89 @@ export default function RealtimePage() {
               </div>
 
               <div className="chart-wrapper">
-                <Line
-                  data={{
-                    labels:
-                      device?.history?.map((item) => item.timestamp) || [],
-                    datasets: [
-                      {
-                        label: `온도 (°C) - ${device.name || ""}`,
-                        data:
-                          device?.history?.map((item) => item.temperature) ||
-                          [],
-                        borderColor: "#FF8787",
-                        backgroundColor: "rgba(255, 135, 135, 0.1)",
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 0,
+              {console.log("차트 데이터:", device.history)} {/* 차트 데이터 확인 */}
+                <Plot
+                  data={[
+                    {
+                      type: "scatter",
+                      mode: "lines",
+                      name: `온도 (°C) - ${device.name}`,
+                      x:
+                        device?.history?.map(
+                          (item) => new Date(item.timestamp)
+                        ) || [], // timestamp를 Date 객체로 변환
+                      y: device?.history?.map((item) => item.temperature) || [],
+                      line: {
+                        color: "#FF8787",
+                        width: 2,
+                        shape: "spline",
                       },
-                      {
-                        label: `습도 (%) - ${device.name || ""}`,
-                        data:
-                          device?.history?.map((item) => item.humidity) || [],
-                        borderColor: "#74C0FC",
-                        backgroundColor: "rgba(116, 192, 252, 0.1)",
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 0,
+                      fill: "tonexty",
+                      fillcolor: "rgba(255, 135, 135, 0.1)",
+                    },
+                    {
+                      type: "scatter",
+                      mode: "lines",
+                      name: `습도 (%) - ${device.name}`,
+                      x:
+                        device?.history?.map(
+                          (item) => new Date(item.timestamp)
+                        ) || [], // timestamp를 Date 객체로 변환
+                      y: device?.history?.map((item) => item.humidity) || [],
+                      line: {
+                        color: "#74C0FC",
+                        width: 2,
+                        shape: "spline",
                       },
-                    ],
+                      fill: "tonexty",
+                      fillcolor: "rgba(116, 192, 252, 0.1)",
+                    },
+                  ]}
+                  layout={{
+                    title: {
+                      text: `${device.name} 센서 데이터`,
+                      font: { size: 16 },
+                    },
+                    xaxis: {
+                      autorange: true,
+                      type: "date",
+                      rangeselector: {
+                        buttons: [
+                          {
+                            count: 15,
+                            label: "15분",
+                            step: "minute",
+                            stepmode: "backward",
+                          },
+                          {
+                            count: 1,
+                            label: "1시간",
+                            step: "hour",
+                            stepmode: "backward",
+                          },
+                          { step: "all", label: "전체" },
+                        ],
+                      },
+                      rangeslider: { visible: true },
+                    },
+                    yaxis: {
+                      autorange: true,
+                      type: "linear",
+                    },
+                    height: 400,
+                    margin: { t: 50, r: 50, l: 50, b: 50 },
+                    paper_bgcolor: "rgba(0,0,0,0)",
+                    plot_bgcolor: "rgba(0,0,0,0)",
+                    font: { color: "#333" },
                   }}
-                  options={chartOptions}
+                  useResizeHandler={true}
+                  style={{ width: "100%", height: "100%" }}
+                  config={{
+                    responsive: true,
+                    displayModeBar: true,
+                    modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                    displaylogo: false,
+                  }}
                 />
               </div>
 

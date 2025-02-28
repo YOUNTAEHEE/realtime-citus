@@ -678,6 +678,7 @@
 //   background-color: #f44336; /* 빨간색 */
 //   box-shadow: 0 0 4px #f44336;
 // }
+
 .status-dot {
   &.normal {
     background-color: #40c057;
@@ -872,7 +873,7 @@
     }
   }
 }
-.no-devices-message {
+.no-devices-message{
   display: flex;
   justify-content: center;
   align-items: center;

@@ -491,6 +491,11 @@
         }
       }
 
+      &.edit-button {
+        background-color: #c0c0c0;
+        color: white;
+      }
+
       &.delete-button {
         background-color: #ff6b6b;
         color: white;
@@ -840,4 +845,13 @@
       }
     }
   }
+}
+.no-devices-message{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  font-size: 1rem;
+  color: #666;
 }

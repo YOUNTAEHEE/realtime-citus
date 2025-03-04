@@ -252,6 +252,39 @@ export default function RealtimePage() {
               throw new Error(`장치 등록 실패: ${device.id}`);
             }
 
+            // 장치 등록 후 InfluxDB에서 하루치 데이터 가져오기
+            try {
+              const historyResponse = await fetch(
+                `http://localhost:8080/api/sensor-data/${device.deviceId}?minutes=1440`
+              );
+
+              if (historyResponse.ok) {
+                const historyData = await historyResponse.json();
+
+                // 장치 데이터 업데이트
+                setDevices((prevDevices) =>
+                  prevDevices.map((d) => {
+                    if (d.deviceId === device.deviceId) {
+                      return {
+                        ...d,
+                        history: historyData.map((item) => ({
+                          temperature: item.temperature,
+                          humidity: item.humidity,
+                          timestamp: new Date(item.timestamp).toISOString(),
+                        })),
+                      };
+                    }
+                    return d;
+                  })
+                );
+              }
+            } catch (error) {
+              console.error(
+                `${device.deviceId} 장치의 히스토리 데이터 로드 실패:`,
+                error
+              );
+            }
+
             return { success: true, deviceId: device.id };
           });
 
@@ -292,7 +325,7 @@ export default function RealtimePage() {
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-
+            console.log("웹소켓에서 받은 데이터:", data);
             // 데이터 수신 시간 업데이트 및 상태 변경
             console.log("데이터 수신:", data.deviceId); // 디버깅용 로그 추가
             lastDataTime[data.deviceId] = Date.now();
@@ -712,6 +745,24 @@ export default function RealtimePage() {
   useEffect(() => {
     console.log("설정값 변경됨:", settings);
   }, [settings]);
+
+  // 날짜 포맷팅 함수 추가
+  const formatDateTime = (timestamp) => {
+    if (!timestamp) return "";
+
+    const date = new Date(timestamp);
+
+    // 날짜와 시간 포맷팅
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
   return (
     <div className="realtime-container">
       <div className="header">
@@ -1380,10 +1431,10 @@ export default function RealtimePage() {
                           { step: "all", label: "전체" },
                         ],
                         // 시간 선택 버튼을 그래프 아래쪽에 배치
-                        y: 1.2,           // 그래프 아래쪽에 배치
-                        x: 0.5,            // 가운데 정렬
+                        y: 1.2, // 그래프 아래쪽에 배치
+                        x: 0.5, // 가운데 정렬
                         xanchor: "center", // 가운데 정렬 기준점
-                        yanchor: "top"     // 기준점을 위로
+                        yanchor: "top", // 기준점을 위로
                       },
                       rangeslider: { visible: true },
                     },
@@ -1437,7 +1488,7 @@ export default function RealtimePage() {
                       <tbody>
                         {device.history.map((item, index) => (
                           <tr key={index}>
-                            <td>{item.timestamp}</td>
+                            <td>{formatDateTime(item.timestamp)}</td>
                             <td>{item.temperature}</td>
                             <td>{item.humidity}</td>
                           </tr>

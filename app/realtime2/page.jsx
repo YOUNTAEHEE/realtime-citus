@@ -1309,7 +1309,8 @@ export default function RealtimePage() {
               </div>
 
               <div className="chart-wrapper">
-              {console.log("차트 데이터:", device.history)} {/* 차트 데이터 확인 */}
+                {console.log("차트 데이터:", device.history)}{" "}
+                {/* 차트 데이터 확인 */}
                 <Plot
                   data={[
                     {
@@ -1352,6 +1353,13 @@ export default function RealtimePage() {
                       text: `${device.name} 센서 데이터`,
                       font: { size: 16 },
                     },
+                    legend: {
+                      orientation: "h", // 가로 방향으로 표시
+                      yanchor: "bottom", // 기준점을 아래로
+                      y: -0.8, // 차트 위에 배치
+                      xanchor: "center", // 가운데 정렬 기준점
+                      x: 0.5, // 가운데 위치
+                    },
                     xaxis: {
                       autorange: true,
                       type: "date",
@@ -1371,6 +1379,11 @@ export default function RealtimePage() {
                           },
                           { step: "all", label: "전체" },
                         ],
+                        // 시간 선택 버튼을 그래프 아래쪽에 배치
+                        y: 1.2,           // 그래프 아래쪽에 배치
+                        x: 0.5,            // 가운데 정렬
+                        xanchor: "center", // 가운데 정렬 기준점
+                        yanchor: "top"     // 기준점을 위로
                       },
                       rangeslider: { visible: true },
                     },
@@ -1379,7 +1392,7 @@ export default function RealtimePage() {
                       type: "linear",
                     },
                     height: 400,
-                    margin: { t: 50, r: 50, l: 50, b: 50 },
+                    margin: { t: 90, r: 50, l: 50, b: 50 },
                     paper_bgcolor: "rgba(0,0,0,0)",
                     plot_bgcolor: "rgba(0,0,0,0)",
                     font: { color: "#333" },

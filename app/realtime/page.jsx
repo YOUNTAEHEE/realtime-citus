@@ -219,7 +219,8 @@ export default function RealtimePage() {
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
-        socket = new WebSocket(`ws://${process.env.NEXT_PUBLIC_API_URL}/modbus`);
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL.replace("http://", "");
+        socket = new WebSocket(`ws://${apiUrl}/modbus`);
 
         socket.onopen = async () => {
           console.log("WebSocket 연결됨");
@@ -414,13 +415,16 @@ export default function RealtimePage() {
 
     try {
       // REST API로 새 장치 등록
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newDevice),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newDevice),
+        }
+      );
 
       if (!response.ok) {
         throw new Error("장치 등록에 실패했습니다.");

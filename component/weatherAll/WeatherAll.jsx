@@ -471,13 +471,16 @@ export default function WeatherAll({
         formattedDateLast
       );
 
-      const response = await axios.get(`http://${process.env.NEXT_PUBLIC_API_URL}/api/weather`, {
-        params: {
-          "date-first": formattedDateFirst,
-          "date-last": formattedDateLast,
-          region: selectedRegion,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/weather`,
+        {
+          params: {
+            "date-first": formattedDateFirst,
+            "date-last": formattedDateLast,
+            region: selectedRegion,
+          },
+        }
+      );
 
       console.log("API 응답:", response.data);
 
@@ -605,7 +608,7 @@ export default function WeatherAll({
       }
 
       const response = await axios.get(
-        `http://${process.env.NEXT_PUBLIC_API_URL}/api/temp-search`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/temp-search`,
         {
           params: {
             date: formatAPIDate(date_temp_search),
@@ -819,7 +822,7 @@ export default function WeatherAll({
           <WeatherMap
             onStationNumberSelect={handleStationSelect}
             // selectedPosition={selectedRegion}
-            mapId={componentId} 
+            mapId={componentId}
           />
           <div className="chart_container_wrap">
             <div className="chart_box">

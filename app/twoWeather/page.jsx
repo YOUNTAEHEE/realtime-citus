@@ -31,16 +31,19 @@ export default function TwoWeather() {
 
   const calculateTempDiff = async () => {
     try {
-      const response = await axios.get(`http://${process.env.NEXT_PUBLIC_API_URL}/api/temp-diff`, {
-        params: {
-          region1: weatherData1.selectedRegion,
-          region2: weatherData2.selectedRegion,
-          dateFirst1: weatherData1.date_first.replace(/-/g, ""), // 날짜 포맷 변환
-          dateLast1: weatherData1.date_last.replace(/-/g, ""),
-          dateFirst2: weatherData2.date_first.replace(/-/g, ""),
-          dateLast2: weatherData2.date_last.replace(/-/g, ""),
-        },
-      });
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/temp-diff`,
+        {
+          params: {
+            region1: weatherData1.selectedRegion,
+            region2: weatherData2.selectedRegion,
+            dateFirst1: weatherData1.date_first.replace(/-/g, ""), // 날짜 포맷 변환
+            dateLast1: weatherData1.date_last.replace(/-/g, ""),
+            dateFirst2: weatherData2.date_first.replace(/-/g, ""),
+            dateLast2: weatherData2.date_last.replace(/-/g, ""),
+          },
+        }
+      );
       console.log("평균 기온 차이:", response.data);
       setRegion1Average(response.data.region1Average);
       setRegion2Average(response.data.region2Average);

@@ -464,13 +464,16 @@ export default function WeatherReact() {
         formattedDateLast
       );
 
-      const response = await axios.get(`http://${process.env.NEXT_PUBLIC_API_URL}/api/weather`, {
-        params: {
-          "date-first": formattedDateFirst,
-          "date-last": formattedDateLast,
-          region: selectedRegion,
-        },
-      });
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/weather`,
+        {
+          params: {
+            "date-first": formattedDateFirst,
+            "date-last": formattedDateLast,
+            region: selectedRegion,
+          },
+        }
+      );
 
       console.log("API 응답:", response.data);
 
@@ -582,7 +585,7 @@ export default function WeatherReact() {
       }
 
       const response = await axios.get(
-        `http://${process.env.NEXT_PUBLIC_API_URL}/api/temp-search`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/temp-search`,
         {
           params: {
             date: formatAPIDate(date_temp_search),

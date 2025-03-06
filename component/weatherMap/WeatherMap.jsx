@@ -15,7 +15,7 @@ export default function WeatherMap({ onStationNumberSelect, mapId  }) {
      
      
       const response = await axios.get(
-        `http://${process.env.NEXT_PUBLIC_API_URL}/api/stations/nearest`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/stations/nearest`,
         {
           params: {
             lat: lat,

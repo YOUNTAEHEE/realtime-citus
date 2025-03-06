@@ -3,7 +3,7 @@ import axios from "axios";
 import { useEffect, useRef, useState } from "react";
 import "./weatherMap.scss";
 
-export default function WeatherMap({ onStationNumberSelect }) {
+export default function WeatherMap({ onStationNumberSelect, mapId  }) {
   const mapContainer = useRef(null);
   const [clickPosition, setClickPosition] = useState(null);
   const [weatherData, setWeatherData] = useState(null);
@@ -81,6 +81,7 @@ export default function WeatherMap({ onStationNumberSelect }) {
 
         // 클릭 이벤트 등록
         maps.event.addListener(map, "click", function (mouseEvent) {
+          console.log(`지도 ${mapId} 클릭됨`);
           const latlng = mouseEvent.latLng;
 
           // 마커 위치 이동
@@ -119,6 +120,7 @@ export default function WeatherMap({ onStationNumberSelect }) {
     <div className="map_wrap">
       <h3 className="map_title">관측소 위치 선택</h3>
       <div
+        id={`map-container-${mapId}`}
         ref={mapContainer}
         style={{
           width: "100%",

@@ -1,34 +1,15 @@
 "use client";
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
+
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { IoMdSettings } from "react-icons/io";
-import Plot from "react-plotly.js";
 import "./realtime.scss";
-// Chart.js 등록
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend
-);
 
-// react-chartjs-2의 Line 컴포넌트를 동적 import (SSR 비활성화)
-const Line = dynamic(() => import("react-chartjs-2").then((mod) => mod.Line), {
-  ssr: false,
-});
+// Plotly 컴포넌트를 동적으로 임포트
+const Plot = dynamic(
+  () => import("react-plotly.js"),
+  { ssr: false } // 서버 사이드 렌더링 비활성화
+);
 
 export default function RealtimePage() {
   const [editDevice, setEditDevice] = useState({

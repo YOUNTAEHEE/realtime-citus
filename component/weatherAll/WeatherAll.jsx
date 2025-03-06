@@ -329,7 +329,10 @@ export const Barchart2 = {
     },
   },
 };
-export default function WeatherAll() {
+export default function WeatherAll({
+  onWeatherDataChange,
+  componentId = "default",
+}) {
   // const [selectedPosition, setSelectedPosition] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const [date_temp_search, setDate_temp_search] = useState("");
@@ -400,9 +403,13 @@ export default function WeatherAll() {
   // WeatherMap에서 선택된 관측소 추가
   const handleStationSelect = (stationData) => {
     if (stationData && stationData.stnId) {
-      console.log("✅ 선택된 관측소 데이터:", stationData); // 🚀 선택된 값 출력 (디버깅)
+      console.log("✅ 선택된 관측소 데이터:", stationData);
 
-      setSelectedRegion(stationData.stnId); // 선택한 관측소 ID 저장
+      // 지역이 변경되었는지 확인
+      if (selectedRegion !== stationData.stnId) {
+        setSelectedRegion(stationData.stnId);
+        setIsSearch(true); // 데이터 다시 가져오기 트리거
+      }
 
       setStationOptions((prevOptions) => {
         const exists = prevOptions.some(
@@ -542,6 +549,11 @@ export default function WeatherAll() {
   const handleSearch = () => {
     setIsLoading(true); // 로딩 상태 시작
     setIsSearch(true);
+    onWeatherDataChange({
+      selectedRegion,
+      date_first,
+      date_last,
+    });
   };
   const [tempSearchResult, setTempSearchResult] = useState({
     datetime: "",
@@ -550,6 +562,17 @@ export default function WeatherAll() {
     humidity: "",
     windDirection: "",
   });
+
+  //  // 값이 변경될 때마다 부모에게 전달
+  //  useEffect(() => {
+  //   if (selectedRegion && date_first && date_last) {
+  //     onWeatherDataChange({
+  //       selectedRegion,
+  //       date_first,
+  //       date_last,
+  //     });
+  //   }
+  // }, [selectedRegion, date_first, date_last, onWeatherDataChange]);
 
   const handleTempSearch = async () => {
     try {
@@ -796,6 +819,7 @@ export default function WeatherAll() {
           <WeatherMap
             onStationNumberSelect={handleStationSelect}
             // selectedPosition={selectedRegion}
+            mapId={componentId} 
           />
           <div className="chart_container_wrap">
             <div className="chart_box">

@@ -200,7 +200,9 @@ export default function RealtimePage() {
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
-        socket = new WebSocket(`ws://${process.env.NEXT_PUBLIC_API_URL}/modbus`);
+        socket = new WebSocket(
+          `ws://${process.env.NEXT_PUBLIC_API_URL}/modbus`
+        );
 
         socket.onopen = async () => {
           console.log("WebSocket 연결됨");
@@ -405,12 +407,14 @@ export default function RealtimePage() {
   // 새 장치 추가 핸들러
   const handleAddDevice = async (e) => {
     e.preventDefault();
+    setError(null); // 이전 오류 메시지 초기화
 
     if (!newDevice.deviceId || !newDevice.host || !newDevice.name) {
       setError("장치 ID, 이름 및 호스트 주소를 입력하세요.");
       return;
     }
 
+    // 디바이스 목록이 비어있거나 조회에 실패한 경우에도 중복 검사를 건너뛰지 않고 진행
     const isDuplicate = devices.some(
       (device) => device.deviceId === newDevice.deviceId
     );
@@ -421,16 +425,20 @@ export default function RealtimePage() {
 
     try {
       // REST API로 새 장치 등록
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(newDevice),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(newDevice),
+        }
+      );
 
       if (!response.ok) {
-        throw new Error("장치 등록에 실패했습니다.");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "장치 등록에 실패했습니다.");
       }
 
       // 프론트엔드 상태 업데이트

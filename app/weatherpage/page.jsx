@@ -5,7 +5,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { SlArrowLeft, SlArrowRight } from "react-icons/sl";
 import { BeatLoader } from "react-spinners";
 import { v4 as uuidv4 } from "uuid";
-import "./weatherPage.scss";
+import "./weatherpage.scss";
 
 // Chart.js와 관련된 모든 import를 dynamic import로 변경
 const ChartComponent = dynamic(

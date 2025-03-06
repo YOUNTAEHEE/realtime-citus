@@ -471,7 +471,7 @@ export default function WeatherAll({
         formattedDateLast
       );
 
-      const response = await axios.get("http://localhost:8080/api/weather", {
+      const response = await axios.get(`http://${process.env.NEXT_PUBLIC_API_URL}/api/weather`, {
         params: {
           "date-first": formattedDateFirst,
           "date-last": formattedDateLast,
@@ -605,7 +605,7 @@ export default function WeatherAll({
       }
 
       const response = await axios.get(
-        "http://localhost:8080/api/temp-search",
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/temp-search`,
         {
           params: {
             date: formatAPIDate(date_temp_search),

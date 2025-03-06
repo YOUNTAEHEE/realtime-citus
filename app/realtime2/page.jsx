@@ -66,7 +66,7 @@ export default function RealtimePage() {
     const fetchDevices = async () => {
       try {
         const response = await fetch(
-          "http://localhost:8080/api/modbus/device/list"
+          `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device/list`
         );
         if (!response.ok) {
           throw new Error("디바이스 목록 조회 실패");
@@ -105,7 +105,7 @@ export default function RealtimePage() {
     try {
       console.log(`설정값 로드 시작 (시도: ${retryCount + 1})`);
       const response = await fetch(
-        "http://localhost:8080/api/modbus/get/settings"
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/get/settings`
       );
 
       console.log("서버 응답 상태:", response.status, response.statusText);
@@ -200,7 +200,7 @@ export default function RealtimePage() {
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
-        socket = new WebSocket("ws://localhost:8080/modbus");
+        socket = new WebSocket(`ws://${process.env.NEXT_PUBLIC_API_URL}/modbus`);
 
         socket.onopen = async () => {
           console.log("WebSocket 연결됨");
@@ -221,7 +221,7 @@ export default function RealtimePage() {
               slaveId: device.slaveId,
             };
             const response = await fetch(
-              "http://localhost:8080/api/modbus/device",
+              `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -236,7 +236,7 @@ export default function RealtimePage() {
             // 장치 등록 후 InfluxDB에서 하루치 데이터 가져오기
             try {
               const historyResponse = await fetch(
-                `http://localhost:8080/api/sensor-data/${device.deviceId}?minutes=1440`
+                `http://${process.env.NEXT_PUBLIC_API_URL}/api/sensor-data/${device.deviceId}?minutes=1440`
               );
 
               if (historyResponse.ok) {
@@ -421,7 +421,7 @@ export default function RealtimePage() {
 
     try {
       // REST API로 새 장치 등록
-      const response = await fetch("http://localhost:8080/api/modbus/device", {
+      const response = await fetch(`http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -496,7 +496,7 @@ export default function RealtimePage() {
       setIsEditing(true);
       setLoading(true);
       const response = await fetch(
-        `http://localhost:8080/api/modbus/device/edit/${editDevice.deviceId}`,
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device/edit/${editDevice.deviceId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -513,7 +513,7 @@ export default function RealtimePage() {
 
       // 성공 시 장치 목록 새로고침
       const updatedDeviceListResponse = await fetch(
-        "http://localhost:8080/api/modbus/device/list"
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device/list`
       );
 
       if (!updatedDeviceListResponse.ok) {
@@ -566,7 +566,7 @@ export default function RealtimePage() {
 
     try {
       const response = await fetch(
-        `http://localhost:8080/api/modbus/device/${deviceId}`,
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device/${deviceId}`,
         {
           method: "DELETE",
         }
@@ -702,7 +702,7 @@ export default function RealtimePage() {
     // TODO: 설정 저장 API 호출
     try {
       const response = await fetch(
-        "http://localhost:8080/api/modbus/settings",
+        `"http://${process.env.NEXT_PUBLIC_API_URL}/api/modbus/settings`,
         {
           method: "POST",
           headers: {

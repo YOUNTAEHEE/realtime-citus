@@ -17,7 +17,7 @@ export default function FutureWeather() {
       setIsLoading(true);
 
       const response = await axios.get(
-        "http://localhost:8080/api/short-term-forecast",
+        `http://${process.env.NEXT_PUBLIC_API_URL}/api/short-term-forecast`,
         {
           params: {
             region: selectedRegion,

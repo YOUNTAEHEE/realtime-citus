@@ -31,7 +31,7 @@ export default function TwoWeather() {
 
   const calculateTempDiff = async () => {
     try {
-      const response = await axios.get(`http://localhost:8080/api/temp-diff`, {
+      const response = await axios.get(`http://${process.env.NEXT_PUBLIC_API_URL}/api/temp-diff`, {
         params: {
           region1: weatherData1.selectedRegion,
           region2: weatherData2.selectedRegion,

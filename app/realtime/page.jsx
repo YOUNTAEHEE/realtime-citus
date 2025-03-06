@@ -53,9 +53,9 @@ export default function RealtimePage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [ws, setWs] = useState(null);
   const [newDevice, setNewDevice] = useState({
-    deviceId: "",
-    name: "",
-    host: "",
+    deviceId: "de3",
+    name: "de3",
+    host: "192.168.10.205",
     port: 502,
     startAddress: 10,
     length: 2,

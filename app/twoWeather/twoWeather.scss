@@ -10,3 +10,19 @@
   align-items: flex-start;
   justify-content: space-between;
 }
+.two_weather_button_container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 1rem;
+  padding-left: 2rem;
+  gap: 15px;
+  > button {
+    background-color: #c694e2;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    cursor: pointer;
+  }
+}

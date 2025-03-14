@@ -56,11 +56,13 @@ export default function TwoWeather() {
   return (
     <div className="two_weather_container">
       <h1 className="two_weather_title">두 개의 지상 관측자료 조회</h1>
-      <button onClick={calculateTempDiff}>두 지역 평균 기온 차이 조회</button>
-      <p>
-        첫번째 지역 평균 기온: {region1Average}, 두번째 지역 평균 기온:{" "}
-        {region2Average}, 두 지역 평균 기온 차이: {tempDiff}
-      </p>
+      <div className="two_weather_button_container">
+        <button onClick={calculateTempDiff}>두 지역 평균 기온 차이 조회</button>
+        <p>
+          <b>첫번째 지역</b> 평균 기온: {region1Average}, <b>두번째 지역</b>{" "}
+          평균 기온: {region2Average}, <b>두 지역</b> 평균 기온 차이: {tempDiff}
+        </p>
+      </div>
       <div className="two_weather_wrap">
         <WeatherAll
           onWeatherDataChange={handleWeatherData1}

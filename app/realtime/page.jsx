@@ -35,10 +35,10 @@ export default function RealtimePage() {
     deviceId: "",
     name: "",
     host: "",
-    port: 502,
-    slaveId: 1,
-    startAddress: 10,
-    length: 2,
+      port: 502,
+      slaveId: 1,
+      startAddress: 10,
+      length: 2,
   });
   const [isEditing, setIsEditing] = useState(false);
   const [editingDeviceId, setEditingDeviceId] = useState(null);
@@ -257,7 +257,7 @@ export default function RealtimePage() {
           });
 
           try {
-            await Promise.all(registrationPromises);
+          await Promise.all(registrationPromises);
           } catch (error) {
             console.error("장치 등록 중 오류:", error);
             setError("일부 장치 등록에 실패했습니다.");
@@ -377,7 +377,7 @@ export default function RealtimePage() {
               "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
             );
           } else {
-            setError("연결 오류가 발생했습니다.");
+          setError("연결 오류가 발생했습니다.");
           }
           setIsConnecting(false);
         };
@@ -418,11 +418,11 @@ export default function RealtimePage() {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(newDevice),
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newDevice),
         }
       );
 
@@ -492,16 +492,16 @@ export default function RealtimePage() {
     try {
       setIsEditing(true);
       setLoading(true);
-      const response = await fetch(
+            const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device/edit/${editDevice.deviceId}`,
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(editDevice),
-        }
-      );
+              }
+            );
 
-      if (!response.ok) {
+            if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
           `장치 업데이트 실패: ${response.status} ${errorData.message || ""}`
@@ -728,18 +728,18 @@ export default function RealtimePage() {
       <div className="header">
         <h1>온도, 습도 실시간 조회</h1>
         <div className="header-button-box">
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="add-device-button"
-          >
-            <span>+</span> 장치 추가
-          </button>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="add-device-button"
+        >
+          <span>+</span> 장치 추가
+        </button>
           <button
             className="setting-button"
             onClick={() => setShowSettingForm(!showSettingForm)}
           >
             <IoMdSettings />
-          </button>
+        </button>
         </div>
       </div>
 
@@ -751,7 +751,7 @@ export default function RealtimePage() {
             <div className="device-info">
               <span className="device-name">{device.name}</span>
               <div className="status-badges">
-                <span
+              <span
                   className={`status-badge ${wsConnected ? "connected" : "disconnected"}`}
                 >
                   {wsConnected ? "웹소켓 연결됨" : "웹소켓 연결 안됨"}
@@ -762,7 +762,7 @@ export default function RealtimePage() {
                   {modbusActive[device.deviceId] && !isConnecting
                     ? "데이터 수신 중"
                     : "데이터 수신 안됨"}
-                </span>
+              </span>
               </div>
             </div>
             <div className="device-actions">
@@ -1289,111 +1289,111 @@ export default function RealtimePage() {
         ) : (
           devices.map((device) => (
             <div key={device.deviceId} className="sensor-section">
-              <h2>
-                {device.name} ({device.host})
-              </h2>
-              <div className="current-values">
-                <div className="value-card">
-                  <h3>현재 기온</h3>
+          <h2>
+            {device.name} ({device.host})
+          </h2>
+          <div className="current-values">
+            <div className="value-card">
+              <h3>현재 기온</h3>
                   <div className="value-container">
-                    <p className="value temperature">
+              <p className="value temperature">
                       {device?.data?.temperature?.toFixed(1)}°C
-                    </p>
+              </p>
                     <div
                       className={`status-dot ${device?.data ? getTemperatureStatus(device.data.temperature) : "unknown"}`}
                       title={`온도 상태: ${device?.data ? getStatusText(getTemperatureStatus(device.data.temperature)) : "알 수 없음"}`}
                     />
                   </div>
-                </div>
-                <div className="value-card">
-                  <h3>현재 습도</h3>
+            </div>
+            <div className="value-card">
+              <h3>현재 습도</h3>
                   <div className="value-container">
-                    <p className="value humidity">
+              <p className="value humidity">
                       {device?.data?.humidity?.toFixed(1)}%
-                    </p>
+              </p>
                     <div
                       className={`status-dot ${device?.data ? getHumidityStatus(device.data.humidity) : "unknown"}`}
                       title={`습도 상태: ${device?.data ? getStatusText(getHumidityStatus(device.data.humidity)) : "알 수 없음"}`}
                     />
                   </div>
-                </div>
-              </div>
+            </div>
+          </div>
 
-              <div className="chart-wrapper">
-                <Line
-                  data={{
+          <div className="chart-wrapper">
+            <Line
+              data={{
                     labels:
                       device?.history?.map((item) => item.timestamp) || [],
-                    datasets: [
-                      {
+                datasets: [
+                  {
                         label: `온도 (°C) - ${device.name || ""}`,
                         data:
                           device?.history?.map((item) => item.temperature) ||
                           [],
-                        borderColor: "#FF8787",
-                        backgroundColor: "rgba(255, 135, 135, 0.1)",
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 0,
-                      },
-                      {
+                    borderColor: "#FF8787",
+                    backgroundColor: "rgba(255, 135, 135, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                  },
+                  {
                         label: `습도 (%) - ${device.name || ""}`,
                         data:
                           device?.history?.map((item) => item.humidity) || [],
-                        borderColor: "#74C0FC",
-                        backgroundColor: "rgba(116, 192, 252, 0.1)",
-                        borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 0,
-                      },
-                    ],
-                  }}
-                  options={chartOptions}
-                />
-              </div>
+                    borderColor: "#74C0FC",
+                    backgroundColor: "rgba(116, 192, 252, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                  },
+                ],
+              }}
+              options={chartOptions}
+            />
+          </div>
 
-              <button
-                onClick={() => {
-                  setDevices((prev) =>
-                    prev.map((d) =>
+          <button
+            onClick={() => {
+              setDevices((prev) =>
+                prev.map((d) =>
                       d.deviceId === device.deviceId
                         ? { ...d, showTable: !d.showTable }
                         : d
-                    )
-                  );
-                }}
-                className="toggle-button"
-              >
-                {device.showTable ? "테이블 숨기기" : "테이블 보기"}
-              </button>
+                )
+              );
+            }}
+            className="toggle-button"
+          >
+            {device.showTable ? "테이블 숨기기" : "테이블 보기"}
+          </button>
 
-              {device.showTable && (
-                <div className="table-container">
-                  <div className="table-wrapper">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>날짜/시간</th>
-                          <th>기온 (°C)</th>
-                          <th>습도 (%)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {device.history.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.timestamp}</td>
-                            <td>{item.temperature}</td>
-                            <td>{item.humidity}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
+          {device.showTable && (
+            <div className="table-container">
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>날짜/시간</th>
+                      <th>기온 (°C)</th>
+                      <th>습도 (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {device.history.map((item, index) => (
+                      <tr key={index}>
+                        <td>{item.timestamp}</td>
+                        <td>{item.temperature}</td>
+                        <td>{item.humidity}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
+          )}
+        </div>
           ))
         )}
       </div>

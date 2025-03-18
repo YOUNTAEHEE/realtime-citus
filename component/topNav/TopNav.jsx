@@ -17,6 +17,8 @@ export default function TopNav() {
       router.push("/realtime");
     } else if (type === "realtime2") {
       router.push("/realtime2");
+    } else if (type === "futureWeatherPage") {
+      router.push("/futureWeatherPage");
     }
   };
   return (
@@ -68,6 +70,13 @@ export default function TopNav() {
       >
         실시간2(DB쿼리)
       </div>
+      {/* <span>|</span>
+      <div
+        className={`top_nav_title ${choice_top_nav === "futureWeatherPage" ? "on" : ""}`}
+        onClick={() => handleTopNavClick("futureWeatherPage")}
+      >
+        단기예보
+      </div> */}
     </div>
   );
 }

@@ -309,7 +309,7 @@ export default function RealtimePage() {
             const data = JSON.parse(event.data);
             console.log("웹소켓에서 받은 데이터:", data);
             // 데이터 수신 시간 업데이트 및 상태 변경
-            console.log("데이터 수신:", data.deviceId); // 디버깅용 로그 추가
+            console.log("데이터 수신:", data.deviceId);
             lastDataTime[data.deviceId] = Date.now();
 
             // 상태 업데이트를 즉시 반영
@@ -317,30 +317,48 @@ export default function RealtimePage() {
               console.log("모드버스 상태 업데이트:", {
                 ...prev,
                 [data.deviceId]: true,
-              }); // 디버깅용 로그 추가
+              });
               return { ...prev, [data.deviceId]: true };
             });
 
             setDevices((prevDevices) =>
               prevDevices.map((device) => {
                 if (device.deviceId === data.deviceId) {
+                  // 백엔드에서 받은 타임스탬프 사용 (없으면 현재 시간 사용)
+                  const timestamp = new Date().toISOString();
+
                   const newData = {
                     temperature: data.temperature,
                     humidity: data.humidity,
-                    // ISO 문자열 형식으로 timestamp 저장
-                    timestamp: new Date().toISOString(),
+                    timestamp: timestamp,
                   };
 
-                  // // 이전 데이터 가져오기
-                  // const lastEntry =
-                  //   device?.history?.length > 0
-                  //     ? device.history[device.history.length - 1]
-                  //     : null;
+                  // 이전 데이터 가져오기
+                  const lastEntry =
+                    device?.history?.length > 0
+                      ? device.history[device.history.length - 1]
+                      : null;
 
-                  // // 같은 시간(초 단위)이면 저장하지 않음
-                  // if (lastEntry && lastEntry.timestamp === newData.timestamp) {
-                  //   return device;
-                  // }
+                  // 중복 체크 개선: 타임스탬프의 날짜, 시간, 분, 초까지 비교
+                  if (lastEntry) {
+                    const lastTime = new Date(lastEntry.timestamp);
+                    const newTime = new Date(timestamp);
+
+                    // 같은 날짜, 시간, 분, 초이고 온도와 습도가 동일하면 중복으로 간주
+                    if (
+                      lastTime.getFullYear() === newTime.getFullYear() &&
+                      lastTime.getMonth() === newTime.getMonth() &&
+                      lastTime.getDate() === newTime.getDate() &&
+                      lastTime.getHours() === newTime.getHours() &&
+                      lastTime.getMinutes() === newTime.getMinutes() &&
+                      lastTime.getSeconds() === newTime.getSeconds() &&
+                      lastEntry.temperature === newData.temperature &&
+                      lastEntry.humidity === newData.humidity
+                    ) {
+                      // 중복 데이터는 추가하지 않고 기존 device 객체 반환
+                      return device;
+                    }
+                  }
 
                   return {
                     ...device,
@@ -348,7 +366,7 @@ export default function RealtimePage() {
                       temperature: data.temperature,
                       humidity: data.humidity,
                     },
-                    history: [...(device.history || []), newData].slice(-86400),
+                    history: [...(device.history || []), newData].slice(-86401),
                   };
                 }
                 return device;

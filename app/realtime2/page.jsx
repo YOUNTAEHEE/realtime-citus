@@ -210,71 +210,50 @@ export default function RealtimePage() {
           setIsConnecting(false);
           setWs(socket);
 
-          // 장치 등록만 병렬로 처리
-          const registrationPromises = devices.map(async (device) => {
-            const deviceInfo = {
-              deviceId: device.deviceId,
-              name: device.name,
-              host: device.host,
-              port: device.port,
-              startAddress: device.startAddress,
-              length: device.length,
-              slaveId: device.slaveId,
-            };
-            const response = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(deviceInfo),
-              }
-            );
-
-            if (!response.ok) {
-              throw new Error(`장치 등록 실패: ${device.id}`);
-            }
-
-            // 장치 등록 후 InfluxDB에서 하루치 데이터 가져오기
-            try {
-              const historyResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_URL}/api/sensor-data/${device.deviceId}?minutes=1440`
-              );
-
-              if (historyResponse.ok) {
-                const historyData = await historyResponse.json();
-
-                // 장치 데이터 업데이트
-                setDevices((prevDevices) =>
-                  prevDevices.map((d) => {
-                    if (d.deviceId === device.deviceId) {
-                      return {
-                        ...d,
-                        history: historyData.map((item) => ({
-                          temperature: item.temperature,
-                          humidity: item.humidity,
-                          timestamp: new Date(item.timestamp).toISOString(),
-                        })),
-                      };
-                    }
-                    return d;
-                  })
-                );
-              }
-            } catch (error) {
-              console.error(
-                `${device.deviceId} 장치의 히스토리 데이터 로드 실패:`,
-                error
-              );
-            }
-
-            return { success: true, deviceId: device.id };
-          });
-
+          // 장치 등록만 병렬로 처리 (24시간 데이터는 백엔드에서 자동으로 전송됨)
           try {
-            await Promise.all(registrationPromises);
+            const registrationPromises = devices.map(async (device) => {
+              console.log(`${device.deviceId} 장치 등록 시작`);
+              const deviceInfo = {
+                deviceId: device.deviceId,
+                name: device.name,
+                host: device.host,
+                port: device.port,
+                startAddress: device.startAddress,
+                length: device.length,
+                slaveId: device.slaveId,
+              };
+
+              const response = await fetch(
+                `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(deviceInfo),
+                }
+              );
+
+              if (!response.ok) {
+                console.error(`장치 등록 실패: ${device.deviceId}`);
+                return { success: false, deviceId: device.deviceId };
+              }
+
+              console.log(`${device.deviceId} 장치 등록 완료`);
+              return { success: true, deviceId: device.deviceId };
+            });
+
+            // 모든 장치 등록 완료 대기
+            const results = await Promise.all(registrationPromises);
+            console.log("모든 장치 등록 완료:", results);
+
+            // 장치 등록 결과 확인 및 오류 처리
+            const failedDevices = results.filter((r) => !r.success);
+            if (failedDevices.length > 0) {
+              console.warn("일부 장치 등록 실패:", failedDevices);
+            }
           } catch (error) {
-            console.error("장치 등록 중 오류:", error);
-            setError("일부 장치 등록에 실패했습니다.");
+            console.error("장치 등록 중 오류 발생:", error);
+            setError("장치 등록 중 오류가 발생했습니다.");
           }
 
           // 모드버스 데이터 수신 체크 인터벌 설정
@@ -285,20 +264,20 @@ export default function RealtimePage() {
             devices.forEach((device) => {
               // 5초 이상 데이터가 수신되지 않으면 비활성으로 간주 (10초에서 5초로 변경)
               const isActive =
-                lastDataTime[device.id] &&
-                now - lastDataTime[device.id] < 10000;
+                lastDataTime[device.deviceId] &&
+                now - lastDataTime[device.deviceId] < 10000;
               console.log(
-                `장치 ${device.id} 상태:`,
+                `장치 ${device.deviceIdid} 상태:`,
                 isActive,
                 "마지막 데이터:",
-                lastDataTime[device.id]
+                lastDataTime[device.deviceId]
               ); // 디버깅용 로그 추가
 
               setModbusActive((prev) => {
-                if (prev[device.id] !== isActive) {
+                if (prev[device.deviceId] !== isActive) {
                   console.log(`장치 ${device.id} 상태 변경:`, isActive); // 디버깅용 로그 추가
                 }
-                return { ...prev, [device.id]: isActive };
+                return { ...prev, [device.deviceId]: isActive };
               });
             });
           }, 1000); // 2초에서 1초로 변경
@@ -307,9 +286,96 @@ export default function RealtimePage() {
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log("웹소켓에서 받은 데이터:", data);
+            console.log(
+              "웹소켓에서 받은 데이터 타입:",
+              data.type,
+              "데이터:",
+              data
+            );
+
+            // 타입이 history인 경우 24시간 이전 데이터로 처리
+            if (data.type === "history") {
+              console.log(
+                `${data.deviceId} 장치의 24시간 이전 데이터 수신 시도:`,
+                data.data ? data.data.length : 0,
+                "개의 데이터"
+              );
+
+              // 데이터가 없는 경우 처리
+              if (
+                !data.data ||
+                !Array.isArray(data.data) ||
+                data.data.length === 0
+              ) {
+                console.warn(
+                  `${data.deviceId} 장치의 24시간 이전 데이터가 없습니다.`
+                );
+                return;
+              }
+
+              // 장치 ID 확인
+              const deviceExists = devices.some(
+                (d) => d.deviceId === data.deviceId
+              );
+              if (!deviceExists) {
+                console.warn(
+                  `장치 ID ${data.deviceId}가 현재 장치 목록에 없습니다.`
+                );
+                return;
+              }
+
+              // 데이터 형식 변환 및 저장
+              const historyData = data.data.map((item) => {
+                console.log("히스토리 아이템:", item); // 개별 항목 로깅
+                return {
+                  temperature:
+                    typeof item.temperature === "number"
+                      ? item.temperature
+                      : parseFloat(item.temperature || 0),
+                  humidity:
+                    typeof item.humidity === "number"
+                      ? item.humidity
+                      : parseFloat(item.humidity || 0),
+                  timestamp: item.timestamp
+                    ? new Date(item.timestamp).toISOString()
+                    : new Date().toISOString(),
+                };
+              });
+
+              console.log(
+                `${data.deviceId} 장치의 변환된 히스토리 데이터:`,
+                historyData.length,
+                "개"
+              );
+
+              // 해당 장치의 이력 데이터 업데이트
+              setDevices((prevDevices) => {
+                const updatedDevices = prevDevices.map((device) => {
+                  if (device.deviceId === data.deviceId) {
+                    console.log(
+                      `${device.deviceId} 장치의 히스토리 데이터 업데이트 중:`,
+                      historyData.length,
+                      "개"
+                    );
+                    return {
+                      ...device,
+                      history: historyData,
+                    };
+                  }
+                  return device;
+                });
+                return updatedDevices;
+              });
+
+              console.log(
+                `${data.deviceId} 장치의 24시간 이전 데이터 처리 완료`
+              );
+              return; // 이력 데이터 처리 후 함수 종료
+            }
+
+            // 기존 실시간 데이터 처리 로직
             // 데이터 수신 시간 업데이트 및 상태 변경
-            console.log("데이터 수신:", data.deviceId);
+            console.log("실시간 데이터 수신:", data.deviceId);
             lastDataTime[data.deviceId] = Date.now();
 
             // 상태 업데이트를 즉시 반영
@@ -338,7 +404,11 @@ export default function RealtimePage() {
                     device?.history?.length > 0
                       ? device.history[device.history.length - 1]
                       : null;
-
+                  // 기존 시간 기반 필터링 추가
+                  const now = new Date();
+                  const oneDayAgo = new Date(
+                    now.getTime() - 24 * 60 * 60 * 1000
+                  );
                   // 중복 체크 개선: 타임스탬프의 날짜, 시간, 분, 초까지 비교
                   if (lastEntry) {
                     const lastTime = new Date(lastEntry.timestamp);
@@ -359,14 +429,18 @@ export default function RealtimePage() {
                       return device;
                     }
                   }
-
+                  // 마지막 24시간 데이터만 유지
+                  const filteredHistory = [
+                    ...(device.history || []),
+                    newData,
+                  ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
                   return {
                     ...device,
                     data: {
                       temperature: data.temperature,
                       humidity: data.humidity,
                     },
-                    history: [...(device.history || []), newData].slice(-86401),
+                    history: filteredHistory, // 정확히 24시간 데이터만 유지
                   };
                 }
                 return device;

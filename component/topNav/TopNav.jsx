@@ -19,6 +19,8 @@ export default function TopNav() {
       router.push("/realtime2");
     } else if (type === "futureWeatherPage") {
       router.push("/futureWeatherPage");
+    } else if (type === "opcua") {
+      router.push("/opcua");
     }
   };
   return (
@@ -77,6 +79,13 @@ export default function TopNav() {
       >
         단기예보
       </div> */}
+      <span>|</span>
+      <div
+        className={`top_nav_title ${choice_top_nav === "opcua" ? "on" : ""}`}
+        onClick={() => handleTopNavClick("opcua")}
+      >
+        OPC UA
+      </div>
     </div>
   );
 }

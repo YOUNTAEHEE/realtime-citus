@@ -201,7 +201,7 @@ export default function RealtimePage() {
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL.replace("http://", "");
-        socket = new WebSocket(`ws://${apiUrl}/modbus`);
+        socket = new WebSocket(`ws://${apiUrl}/ws/modbus`);
 
         socket.onopen = async () => {
           console.log("WebSocket 연결됨");

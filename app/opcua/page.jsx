@@ -41,8 +41,12 @@ export default function OpcuaPage() {
     setLoading(true);
     let socket = null;
     let reconnectTimeout = null;
+    // 클린업 중인지 표시하는 플래그 추가
+    let isCleaning = false;
 
     const connect = () => {
+      if (isCleaning) return; // 클린업 중이면 연결 시도하지 않음
+
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
       const wsUrl = apiUrl.replace(/^http/, "ws");
       socket = new WebSocket(`${wsUrl}/ws/opcua`);
@@ -88,11 +92,13 @@ export default function OpcuaPage() {
         console.log("OPC UA 웹소켓 연결 종료:", event.code);
         setWsConnected(false);
 
-        // 5초 후 재연결 시도
-        reconnectTimeout = setTimeout(() => {
-          console.log("OPC UA 웹소켓 재연결 시도...");
-          connect();
-        }, 5000);
+        // 클린업 중이 아닐 때만 재연결 시도
+        if (!isCleaning) {
+          reconnectTimeout = setTimeout(() => {
+            console.log("OPC UA 웹소켓 재연결 시도...");
+            connect();
+          }, 5000);
+        }
       };
 
       socket.onerror = (error) => {
@@ -103,14 +109,40 @@ export default function OpcuaPage() {
 
     connect();
 
-    // 컴포넌트 언마운트 시 웹소켓 연결 및 타이머 정리
+    // 강화된 클린업 함수
     return () => {
+      console.log("OPC UA 웹소켓 연결 정리 시작");
+      isCleaning = true; // 클린업 플래그 설정
+
+      // 웹소켓 상태 확인 및 연결 종료
       if (socket) {
-        socket.close();
+        // 이벤트 리스너 제거
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onclose = null;
+        socket.onerror = null;
+
+        // readyState 체크 후 연결 종료
+        if (
+          socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING
+        ) {
+          socket.close();
+        }
+        socket = null; // 참조 제거
       }
+
+      // 타이머 정리
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
       }
+
+      // 상태 정리
+      setWsConnected(false);
+      setLoading(false);
+
+      console.log("OPC UA 웹소켓 연결 정리 완료");
     };
   }, []);
 
@@ -118,61 +150,49 @@ export default function OpcuaPage() {
   const processRealTimeData = (message) => {
     if (!message.data) return;
 
-    const timestamp = message.timestamp || new Date().toISOString();
-    const newData = { timestamp };
+    console.log("받은 데이터 구조:", message.data); // 먼저 구조 확인
 
-    // 데이터 그룹화 및 저장
+    const timestamp = message.timestamp || new Date().toISOString();
+
+    // 새로운 데이터 처리 로직
     setOpcuaData((prevData) => {
       const updatedData = { ...prevData };
 
-      // Total 데이터 처리
-      if (message.data.Common || message.data.Total) {
-        const totalData = {
-          ...prevData.Total.data,
-          Filtered_Grid_Freq: message.data.Common?.Filtered_Grid_Freq || 0,
-          T_Simul_P_REAL: message.data.Common?.T_Simul_P_REAL || 0,
-          Total_TPWR_P_REAL: message.data.Total?.TPWR_P_REAL || 0,
-          Total_TPWR_P_REF: message.data.Total?.TPWR_P_REF || 0,
+      // OPC_UA 객체가 있는지 확인
+      if (message.data.OPC_UA) {
+        const opcData = message.data.OPC_UA;
+
+        // Total/Common 데이터
+        updatedData.Total.data = {
+          Filtered_Grid_Freq: opcData.Filtered_Grid_Freq || 0,
+          T_Simul_P_REAL: opcData.T_Simul_P_REAL || 0,
+          Total_TPWR_P_REAL: opcData.Total_TPWR_P_REAL || 0,
+          Total_TPWR_P_REF: opcData.Total_TPWR_P_REF || 0,
         };
 
-        // 히스토리에 데이터 추가 (24시간 데이터만 유지)
+        // 히스토리에 추가
         const now = new Date();
         const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        const newHistory = [
+        updatedData.Total.history = [
           ...prevData.Total.history,
-          { ...totalData, timestamp },
+          { ...updatedData.Total.data, timestamp },
         ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
 
-        updatedData.Total = {
-          data: totalData,
-          history: newHistory,
-        };
-      }
-
-      // PCS1~4 데이터 처리
-      ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
-        if (message.data[pcs]) {
-          const pcsData = {
-            ...prevData[pcs].data,
-            Filtered_Grid_Freq: message.data.Common?.Filtered_Grid_Freq || 0,
-            TPWR_P_REAL: message.data[pcs]?.TPWR_P_REAL || 0,
-            TPWR_P_REF: message.data[pcs]?.TPWR_P_REF || 0,
-            SOC: message.data[pcs]?.SOC || 0,
+        // PCS1~4 데이터
+        ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
+          updatedData[pcs].data = {
+            Filtered_Grid_Freq: opcData.Filtered_Grid_Freq || 0,
+            TPWR_P_REAL: opcData[`${pcs}_TPWR_P_REAL`] || 0,
+            TPWR_P_REF: opcData[`${pcs}_TPWR_P_REF`] || 0,
+            SOC: opcData[`${pcs}_SOC`] || 0,
           };
 
-          const now = new Date();
-          const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-          const newHistory = [
+          updatedData[pcs].history = [
             ...prevData[pcs].history,
-            { ...pcsData, timestamp },
+            { ...updatedData[pcs].data, timestamp },
           ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
-
-          updatedData[pcs] = {
-            data: pcsData,
-            history: newHistory,
-          };
-        }
-      });
+        });
+      }
 
       return updatedData;
     });

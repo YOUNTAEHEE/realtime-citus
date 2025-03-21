@@ -197,6 +197,8 @@ export default function RealtimePage() {
     let socket = null;
     let lastDataTime = {}; // 장치별 마지막 데이터 수신 시간
     let checkInterval = null; // 데이터 수신 체크 인터벌
+    let reconnectTimeout = null; // 재연결 타임아웃 변수 추가
+    let isCleaning = false; // 클린업 중임을 표시하는 변수 추가
 
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
@@ -461,8 +463,9 @@ export default function RealtimePage() {
             checkInterval = null;
           }
 
-          if (!event.wasClean) {
-            setTimeout(() => connect(), 5000);
+          if (!event.wasClean && !isCleaning) {
+            // 클린업 중이 아닐 때만 재연결 시도
+            reconnectTimeout = setTimeout(() => connect(), 5000);
           }
         };
 
@@ -483,15 +486,54 @@ export default function RealtimePage() {
       }
     };
 
+    // 컴포넌트 마운트 시 연결 플래그 설정
+    isCleaning = false;
+
     connect();
 
+    // 클린업 함수 강화
     return () => {
+      // 클린업 중임을 표시하여 재연결 방지
+      isCleaning = true;
+      console.log("모드버스 웹소켓 연결 정리 시작");
+
+      // 웹소켓 상태 확인 후 종료
       if (socket) {
-        socket.close();
+        // readyState 체크 추가
+        if (
+          socket.readyState === WebSocket.OPEN ||
+          socket.readyState === WebSocket.CONNECTING
+        ) {
+          // 명시적으로 이벤트 리스너 제거 (메모리 누수 방지)
+          socket.onopen = null;
+          socket.onmessage = null;
+          socket.onerror = null;
+          socket.onclose = null;
+
+          // 연결 종료
+          socket.close();
+        }
+        // 참조 정리
+        socket = null;
       }
+
+      // 타이머 정리
       if (checkInterval) {
         clearInterval(checkInterval);
+        checkInterval = null;
       }
+
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+
+      // 상태 정리
+      setWsConnected(false);
+      setModbusActive({});
+      setWs(null);
+
+      console.log("모드버스 웹소켓 연결 정리 완료");
     };
   }, [devices.length, reconnectTrigger]);
 

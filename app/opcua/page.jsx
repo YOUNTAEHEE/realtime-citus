@@ -41,8 +41,31 @@ export default function OpcuaPage() {
     setLoading(true);
     let socket = null;
     let reconnectTimeout = null;
-    // 클린업 중인지 표시하는 플래그 추가
     let isCleaning = false;
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+
+    // 모드버스 서비스 중지 먼저 호출 (추가 필요)
+    fetch(`${apiUrl}/api/modbus/stop`, {
+      method: "POST",
+    })
+      .then((response) => {
+        console.log("모드버스 서비스 중지 응답:", response.status);
+        // 모드버스 중지 성공 후 OPC UA 시작
+        return fetch(`${apiUrl}/api/opcua/start`, {
+          method: "POST",
+        });
+      })
+      .then((response) => {
+        if (response.ok) {
+          console.log("OPC UA 서비스가 시작되었습니다.");
+        } else {
+          console.error("OPC UA 서비스 시작 실패");
+        }
+      })
+      .catch((error) => {
+        console.error("서비스 전환 중 오류:", error);
+      });
 
     const connect = () => {
       if (isCleaning) return; // 클린업 중이면 연결 시도하지 않음
@@ -68,10 +91,42 @@ export default function OpcuaPage() {
 
       socket.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data);
-          console.log("OPC UA 데이터 수신:", message.type);
+          console.log(
+            "원본 메시지 내용:",
+            event.data.substring(0, 500) +
+              (event.data.length > 500 ? "..." : "")
+          );
+
+          // 유효한 JSON인지 확인
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch (jsonError) {
+            console.error("유효하지 않은 JSON 데이터:", jsonError);
+            setError("잘못된 데이터 형식을 받았습니다. 서버를 확인하세요.");
+            return;
+          }
+
+          console.log("메시지 타입:", message.type);
 
           if (message.type === "opcua") {
+            // 데이터 구조 확인
+            if (!message.data) {
+              console.warn("데이터 없음:", message);
+              return;
+            }
+
+            // 데이터 구조 상세 확인
+            console.log(
+              "데이터 구조:",
+              JSON.stringify({
+                hasOpcUa: !!message.data.OPC_UA,
+                keys: message.data.OPC_UA
+                  ? Object.keys(message.data.OPC_UA).slice(0, 5)
+                  : null,
+              })
+            );
+
             // 실시간 데이터 처리
             processRealTimeData(message);
           } else if (message.type === "historicalData") {
@@ -84,7 +139,8 @@ export default function OpcuaPage() {
             setError(message.message);
           }
         } catch (error) {
-          console.error("메시지 처리 오류:", error);
+          console.error("메시지 처리 중 예외 발생:", error);
+          setError("메시지 처리 중 오류가 발생했습니다: " + error.message);
         }
       };
 
@@ -107,14 +163,15 @@ export default function OpcuaPage() {
       };
     };
 
+    // 기존처럼 바로 웹소켓 연결 시작
     connect();
 
-    // 강화된 클린업 함수
+    // 클린업 함수에 서비스 중지 호출 추가
     return () => {
       console.log("OPC UA 웹소켓 연결 정리 시작");
-      isCleaning = true; // 클린업 플래그 설정
+      isCleaning = true;
 
-      // 웹소켓 상태 확인 및 연결 종료
+      // 기존 웹소켓 정리 코드는 그대로 유지
       if (socket) {
         // 이벤트 리스너 제거
         socket.onopen = null;
@@ -138,6 +195,11 @@ export default function OpcuaPage() {
         reconnectTimeout = null;
       }
 
+      // OPC UA 서비스 중지 호출 추가
+      fetch(`${apiUrl}/api/opcua/stop`, {
+        method: "POST",
+      }).catch((error) => console.error("OPC UA 서비스 중지 오류:", error));
+
       // 상태 정리
       setWsConnected(false);
       setLoading(false);
@@ -148,26 +210,54 @@ export default function OpcuaPage() {
 
   // 실시간 데이터 처리
   const processRealTimeData = (message) => {
-    if (!message.data) return;
+    try {
+      // 기본 검사
+      if (!message || !message.data) {
+        console.warn("유효하지 않은 메시지 형식:", message);
+        return;
+      }
 
-    console.log("받은 데이터 구조:", message.data); // 먼저 구조 확인
+      const timestamp = message.timestamp || new Date().toISOString();
 
-    const timestamp = message.timestamp || new Date().toISOString();
+      // 안전한 데이터 접근
+      if (!message.data.OPC_UA) {
+        console.warn("OPC_UA 객체가 없습니다:", message.data);
+        return;
+      }
 
-    // 새로운 데이터 처리 로직
-    setOpcuaData((prevData) => {
-      const updatedData = { ...prevData };
+      const rawOpcData = message.data.OPC_UA || {};
+      console.log(
+        "원본 OPC_UA 데이터 키:",
+        Object.keys(rawOpcData).slice(0, 5)
+      );
 
-      // OPC_UA 객체가 있는지 확인
-      if (message.data.OPC_UA) {
-        const opcData = message.data.OPC_UA;
+      // 접두사 처리: OPC_UA_ 접두사 제거
+      const opcData = {};
+      for (const [key, value] of Object.entries(rawOpcData)) {
+        // OPC_UA_ 접두사 제거
+        const cleanKey = key.replace("OPC_UA_", "");
+        opcData[cleanKey] = value;
+      }
+
+      console.log("처리된 OPC_UA 데이터 키:", Object.keys(opcData).slice(0, 5));
+
+      // PCS 필드 검사
+      ["PCS1_TPWR_P_REAL", "PCS1_SOC", "Filtered_Grid_Freq"].forEach(
+        (field) => {
+          console.log(`${field} 값 확인:`, opcData[field]);
+        }
+      );
+
+      // 데이터 업데이트 처리
+      setOpcuaData((prevData) => {
+        const updatedData = { ...prevData };
 
         // Total/Common 데이터
         updatedData.Total.data = {
-          Filtered_Grid_Freq: opcData.Filtered_Grid_Freq || 0,
-          T_Simul_P_REAL: opcData.T_Simul_P_REAL || 0,
-          Total_TPWR_P_REAL: opcData.Total_TPWR_P_REAL || 0,
-          Total_TPWR_P_REF: opcData.Total_TPWR_P_REF || 0,
+          Filtered_Grid_Freq: parseFloat(opcData.Filtered_Grid_Freq) || 0,
+          T_Simul_P_REAL: parseFloat(opcData.T_Simul_P_REAL) || 0,
+          Total_TPWR_P_REAL: parseFloat(opcData.Total_TPWR_P_REAL) || 0,
+          Total_TPWR_P_REF: parseFloat(opcData.Total_TPWR_P_REF) || 0,
         };
 
         // 히스토리에 추가
@@ -181,21 +271,40 @@ export default function OpcuaPage() {
         // PCS1~4 데이터
         ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
           updatedData[pcs].data = {
-            Filtered_Grid_Freq: opcData.Filtered_Grid_Freq || 0,
-            TPWR_P_REAL: opcData[`${pcs}_TPWR_P_REAL`] || 0,
-            TPWR_P_REF: opcData[`${pcs}_TPWR_P_REF`] || 0,
-            SOC: opcData[`${pcs}_SOC`] || 0,
+            Filtered_Grid_Freq: parseFloat(opcData.Filtered_Grid_Freq) || 0,
+            TPWR_P_REAL: parseFloat(opcData[`${pcs}_TPWR_P_REAL`]) || 0,
+            TPWR_P_REF: parseFloat(opcData[`${pcs}_TPWR_P_REF`]) || 0,
+            SOC: parseFloat(opcData[`${pcs}_SOC`]) || 0,
           };
+
+          // 디버깅: PCS 데이터 로깅
+          if (pcs === "PCS1") {
+            console.log("PCS1 데이터:", {
+              original: {
+                TPWR_P_REAL: opcData.PCS1_TPWR_P_REAL,
+                TPWR_P_REF: opcData.PCS1_TPWR_P_REF,
+                SOC: opcData.PCS1_SOC,
+              },
+              processed: updatedData.PCS1.data,
+            });
+          }
 
           updatedData[pcs].history = [
             ...prevData[pcs].history,
             { ...updatedData[pcs].data, timestamp },
           ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
         });
-      }
 
-      return updatedData;
-    });
+        return updatedData;
+      });
+
+      // 마지막에 오류 초기화 추가
+      setError(null); // 성공적으로 처리되면 오류 메시지 제거
+
+      console.log("데이터 처리 완료");
+    } catch (err) {
+      console.error("데이터 처리 중 오류 발생:", err, err.stack);
+    }
   };
 
   // 과거 데이터 처리

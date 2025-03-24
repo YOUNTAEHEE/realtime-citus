@@ -203,6 +203,10 @@ export default function RealtimePage() {
     const connect = async () => {
       if (!socket || socket.readyState === WebSocket.CLOSED) {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL.replace("http://", "");
+
+        // 웹소켓 URL 로깅 추가
+        console.log("모드버스 웹소켓 연결 시도: ", `ws://${apiUrl}/ws/modbus`);
+
         socket = new WebSocket(`ws://${apiUrl}/ws/modbus`);
 
         socket.onopen = async () => {
@@ -212,11 +216,13 @@ export default function RealtimePage() {
           setIsConnecting(false);
           setWs(socket);
 
-          // 장치 등록만 병렬로 처리 (24시간 데이터는 백엔드에서 자동으로 전송됨)
+          // 웹소켓 연결 후 장치 등록 시도
           try {
             const registrationPromises = devices.map(async (device) => {
               console.log(`${device.deviceId} 장치 등록 시작`);
-              const deviceInfo = {
+
+              // 장치 정보를 콘솔에 출력하여 확인
+              console.log("장치 정보:", {
                 deviceId: device.deviceId,
                 name: device.name,
                 host: device.host,
@@ -224,35 +230,47 @@ export default function RealtimePage() {
                 startAddress: device.startAddress,
                 length: device.length,
                 slaveId: device.slaveId,
-              };
+              });
 
+              // 장치 등록 요청
               const response = await fetch(
                 `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,
                 {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(deviceInfo),
+                  body: JSON.stringify({
+                    deviceId: device.deviceId,
+                    name: device.name,
+                    host: device.host,
+                    port: device.port,
+                    startAddress: device.startAddress,
+                    length: device.length,
+                    slaveId: device.slaveId,
+                  }),
                 }
               );
 
-              if (!response.ok) {
-                console.error(`장치 등록 실패: ${device.deviceId}`);
-                return { success: false, deviceId: device.deviceId };
+              // 응답 상태 및 본문 확인
+              const status = response.status;
+              const text = await response.text();
+              console.log(`장치 등록 응답: 상태=${status}, 내용=${text}`);
+
+              const success = response.ok;
+              if (!success) {
+                console.error(
+                  `장치 등록 실패: ${device.deviceId}, 응답:`,
+                  text
+                );
+              } else {
+                console.log(`${device.deviceId} 장치 등록 완료`);
               }
 
-              console.log(`${device.deviceId} 장치 등록 완료`);
-              return { success: true, deviceId: device.deviceId };
+              return { success, deviceId: device.deviceId };
             });
 
             // 모든 장치 등록 완료 대기
             const results = await Promise.all(registrationPromises);
-            console.log("모든 장치 등록 완료:", results);
-
-            // 장치 등록 결과 확인 및 오류 처리
-            const failedDevices = results.filter((r) => !r.success);
-            if (failedDevices.length > 0) {
-              console.warn("일부 장치 등록 실패:", failedDevices);
-            }
+            console.log("모든 장치 등록 결과:", results);
           } catch (error) {
             console.error("장치 등록 중 오류 발생:", error);
             setError("장치 등록 중 오류가 발생했습니다.");
@@ -285,8 +303,12 @@ export default function RealtimePage() {
           }, 1000); // 2초에서 1초로 변경
         };
 
+        // onmessage 처리 강화
         socket.onmessage = (event) => {
           try {
+            // 원본 데이터 로깅 (문제 디버깅용)
+            console.log("웹소켓 원본 데이터:", event.data.substring(0, 200));
+
             const data = JSON.parse(event.data);
             console.log(
               "웹소켓에서 받은 데이터 타입:",
@@ -470,17 +492,8 @@ export default function RealtimePage() {
         };
 
         socket.onerror = (error) => {
-          // 오류 객체를 직접 기록하지 않고 발생 사실만 기록
-          console.log("WebSocket 연결 중 오류가 발생했습니다");
-
-          // 사용자에게는 간단한 메시지만 표시
-          if (!wsConnected) {
-            setError(
-              "서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요."
-            );
-          } else {
-            setError("연결 오류가 발생했습니다.");
-          }
+          console.error("WebSocket 오류:", error);
+          setError("웹소켓 연결 중 오류가 발생했습니다.");
           setIsConnecting(false);
         };
       }
@@ -528,6 +541,12 @@ export default function RealtimePage() {
         reconnectTimeout = null;
       }
 
+      // 모드버스 서비스 중지 API 호출 추가
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+      fetch(`${apiUrl}/api/modbus/stop`, {
+        method: "POST",
+      }).catch((error) => console.error("모드버스 서비스 중지 오류:", error));
+
       // 상태 정리
       setWsConnected(false);
       setModbusActive({});
@@ -540,23 +559,31 @@ export default function RealtimePage() {
   // 새 장치 추가 핸들러
   const handleAddDevice = async (e) => {
     e.preventDefault();
-    setError(null); // 이전 오류 메시지 초기화
-
-    if (!newDevice.deviceId || !newDevice.host || !newDevice.name) {
-      setError("장치 ID, 이름 및 호스트 주소를 입력하세요.");
-      return;
-    }
-
-    // 디바이스 목록이 비어있거나 조회에 실패한 경우에도 중복 검사를 건너뛰지 않고 진행
-    const isDuplicate = devices.some(
-      (device) => device.deviceId === newDevice.deviceId
-    );
-    if (isDuplicate) {
-      setError("이미 존재하는 장치 ID입니다.");
-      return;
-    }
+    setError(null);
 
     try {
+      // 등록 전 모든 연결 초기화 요청
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/reset-connections`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!newDevice.deviceId || !newDevice.host || !newDevice.name) {
+        setError("장치 ID, 이름 및 호스트 주소를 입력하세요.");
+        return;
+      }
+
+      // 디바이스 목록이 비어있거나 조회에 실패한 경우에도 중복 검사를 건너뛰지 않고 진행
+      const isDuplicate = devices.some(
+        (device) => device.deviceId === newDevice.deviceId
+      );
+      if (isDuplicate) {
+        setError("이미 존재하는 장치 ID입니다.");
+        return;
+      }
+
       // REST API로 새 장치 등록
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/modbus/device`,

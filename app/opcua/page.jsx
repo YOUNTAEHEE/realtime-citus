@@ -17,12 +17,108 @@ const Plot = dynamic(
 // 카드 컴포넌트 (각 PCS 및 Total에 사용)
 const DataCard = ({ title, data, unit = "" }) => (
   <div className="opcua-card">
-    <h3>{title}</h3>
-    <div className="value">
-      {data !== undefined ? `${data} ${unit}` : "데이터 없음"}
+    <div className="card-content">
+      <h3 className="card-title">{title}</h3>
+      <div className="card-value">
+        {data !== undefined ? (
+          <>
+            <span className="value-number">{data}</span>
+            <span className="value-unit">{unit}</span>
+          </>
+        ) : (
+          <span className="no-data">데이터 없음</span>
+        )}
+      </div>
     </div>
   </div>
 );
+
+// PCS1~4에 공통으로 적용할 차트 레이아웃 설정 - 시간 표시 형식 개선
+const commonChartLayout = {
+  xaxis: {
+    title: "시간",
+    type: "date",
+    tickformat: "%H:%M:%S.%L<br>%Y-%m-%d", // 시:분:초.밀리초 형식으로 표시
+    autorange: true,
+    rangemode: "normal",
+    gridcolor: "#e0e0e0",
+    linecolor: "#cccccc",
+    tickfont: { size: 10, family: "Pretendard, sans-serif" },
+    titlefont: {
+      size: 13,
+      color: "#444",
+      family: "Pretendard, sans-serif",
+    },
+    showgrid: true,
+    zeroline: false,
+  },
+  yaxis: {
+    title: "전력 (MW)",
+    autorange: true,
+    gridcolor: "#e0e0e0",
+    linecolor: "#cccccc",
+    tickfont: { size: 10, family: "Pretendard, sans-serif" },
+    titlefont: {
+      size: 13,
+      color: "#444",
+      family: "Pretendard, sans-serif",
+    },
+    showgrid: true,
+    zeroline: false,
+    rangemode: "normal",
+  },
+  height: 600,
+  margin: { t: 50, r: 40, l: 60, b: 70 },
+  paper_bgcolor: "#ffffff",
+  plot_bgcolor: "#f8f9fa",
+  font: {
+    family:
+      "Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif",
+    size: 12,
+    color: "#444",
+  },
+  title: {
+    font: {
+      size: 16,
+      color: "#2d3748",
+      family: "Pretendard, sans-serif",
+      weight: 600,
+    },
+    y: 0.98,
+  },
+  legend: {
+    orientation: "h",
+    y: -0.18,
+    x: 0.5,
+    xanchor: "center",
+    font: {
+      size: 11,
+      family: "Pretendard, sans-serif",
+    },
+    bgcolor: "#ffffff",
+    bordercolor: "#e8e8e8",
+    borderwidth: 1,
+    itemsizing: "constant",
+    itemwidth: 40,
+    itemclick: false,
+    itemdoubleclick: false,
+  },
+  modebar: {
+    bgcolor: "rgba(255, 255, 255, 0.8)",
+    color: "#2d3748",
+    activecolor: "#3b82f6",
+  },
+  hovermode: "closest",
+  hoverlabel: {
+    bgcolor: "#ffffff",
+    font: { size: 12, family: "Pretendard, sans-serif", color: "#2d3748" },
+    bordercolor: "#e0e0e0",
+  },
+  dragmode: "zoom",
+  selectdirection: "h",
+  shapes: [],
+  annotations: [],
+};
 
 export default function OpcuaPage() {
   const [opcuaData, setOpcuaData] = useState({
@@ -35,6 +131,7 @@ export default function OpcuaPage() {
   const [wsConnected, setWsConnected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTab, setSelectedTab] = useState("Total");
 
   // 웹소켓 연결 설정
   useEffect(() => {
@@ -410,8 +507,8 @@ export default function OpcuaPage() {
 
       <div className="opcua-grid">
         {/* Total 차트 패널 */}
-        <div className="opcua-panel">
-          <h2>{getTitleForGroup("Total")}</h2>
+        <div className="opcua-panel total-panel">
+          <h2 className="panel-title">{getTitleForGroup("Total")}</h2>
           <div className="opcua-values">
             <DataCard
               title="- Filtered_Grid_Freq"
@@ -540,94 +637,324 @@ export default function OpcuaPage() {
         </div>
       </div>
 
-      {/* 차트 영역 (필요하면 추가) */}
-      <div className="chart-container">
-        <div className="chart-wrapper">
-          <Plot
-            data={[
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "Total Power",
-                x: opcuaData.Total.history.map(
-                  (item) => new Date(item.timestamp)
-                ),
-                y: opcuaData.Total.history.map(
-                  (item) => item.Total_TPWR_P_REAL
-                ),
-                line: { color: "#FF8787", width: 2 },
-              },
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "PCS1 Power",
-                x: opcuaData.PCS1.history.map(
-                  (item) => new Date(item.timestamp)
-                ),
-                y: opcuaData.PCS1.history.map((item) => item.TPWR_P_REAL),
-                line: { color: "#74C0FC", width: 2 },
-              },
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "PCS2 Power",
-                x: opcuaData.PCS2.history.map(
-                  (item) => new Date(item.timestamp)
-                ),
-                y: opcuaData.PCS2.history.map((item) => item.TPWR_P_REAL),
-                line: { color: "#B197FC", width: 2 },
-              },
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "PCS3 Power",
-                x: opcuaData.PCS3.history.map(
-                  (item) => new Date(item.timestamp)
-                ),
-                y: opcuaData.PCS3.history.map((item) => item.TPWR_P_REAL),
-                line: { color: "#69DB7C", width: 2 },
-              },
-              {
-                type: "scatter",
-                mode: "lines",
-                name: "PCS4 Power",
-                x: opcuaData.PCS4.history.map(
-                  (item) => new Date(item.timestamp)
-                ),
-                y: opcuaData.PCS4.history.map((item) => item.TPWR_P_REAL),
-                line: { color: "#FAB005", width: 2 },
-              },
-            ]}
-            layout={{
-              title: "전력 출력 추이",
-              uirevision: "true", // 차트 줌 상태 유지
-              legend: {
-                orientation: "h",
-                y: -0.2,
-              },
-              xaxis: {
-                title: "시간",
-                autorange: true,
-                type: "date",
-                rangeslider: { visible: true },
-              },
-              yaxis: {
-                title: "전력 (MW)",
-                autorange: true,
-              },
-              height: 500,
-              margin: { t: 50, r: 30, l: 60, b: 80 },
-              paper_bgcolor: "rgba(0,0,0,0)",
-              plot_bgcolor: "rgba(0,0,0,0)",
-            }}
-            useResizeHandler={true}
-            style={{ width: "100%", height: "100%" }}
-            config={{
-              responsive: true,
-              displayModeBar: true,
-              displaylogo: false,
-            }}
-          />
+      {/* 차트 영역 - 탭 메뉴 디자인 개선 */}
+      <div className="chart-section">
+        <div className="chart-tabs">
+          {["Total", "PCS1", "PCS2", "PCS3", "PCS4"].map((tab) => (
+            <button
+              key={tab}
+              className={`tab-button ${selectedTab === tab ? "active" : ""}`}
+              onClick={() => setSelectedTab(tab)}
+              style={{
+                background: selectedTab === tab ? "#ffffff" : "transparent",
+                color: selectedTab === tab ? "#3366cc" : "#666666",
+                borderBottom:
+                  selectedTab === tab ? "3px solid #3366cc" : "none",
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
+                padding: "12px 20px",
+                fontSize: "14px",
+                fontWeight: selectedTab === tab ? "600" : "400",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                position: "relative",
+                outline: "none",
+              }}
+            >
+              {tab === "Total" ? "Total Trends" : tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="chart-container">
+          {selectedTab === "Total" && (
+            <div className="chart-wrapper">
+              <Plot
+                data={[
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "Filtered Grid Freq",
+                    x: opcuaData.Total.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.Total.history.map((item) =>
+                      item.Filtered_Grid_Freq === -1
+                        ? null
+                        : item.Filtered_Grid_Freq
+                    ),
+                    line: { color: "#74C0FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "T Simul P REAL",
+                    x: opcuaData.Total.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.Total.history.map((item) =>
+                      item.T_Simul_P_REAL === -1 ? null : item.T_Simul_P_REAL
+                    ),
+                    line: { color: "#FF8787", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "Total TPWR P REAL",
+                    x: opcuaData.Total.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.Total.history.map((item) =>
+                      item.Total_TPWR_P_REAL === -1
+                        ? null
+                        : item.Total_TPWR_P_REAL
+                    ),
+                    line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "Total TPWR P REF",
+                    x: opcuaData.Total.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.Total.history.map((item) =>
+                      item.Total_TPWR_P_REF === -1
+                        ? null
+                        : item.Total_TPWR_P_REF
+                    ),
+                    line: { color: "#FAB005", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                ]}
+                layout={{
+                  ...commonChartLayout,
+                  title: "Total Trends (8MW)",
+                  uirevision: "total",
+                }}
+                useResizeHandler={true}
+                style={{ width: "100%", height: "100%" }}
+                config={{
+                  responsive: true,
+                  displayModeBar: true,
+                  displaylogo: false,
+                  locale: "ko",
+                  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                }}
+              />
+            </div>
+          )}
+
+          {selectedTab === "PCS1" && (
+            <div className="chart-wrapper">
+              <Plot
+                data={[
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "Filtered Grid Freq",
+                    x: opcuaData.PCS1.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS1.history.map((item) =>
+                      item.Filtered_Grid_Freq === -1
+                        ? null
+                        : item.Filtered_Grid_Freq
+                    ),
+                    line: { color: "#74C0FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REAL",
+                    x: opcuaData.PCS1.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS1.history.map((item) =>
+                      item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
+                    ),
+                    line: { color: "#FF8787", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REF",
+                    x: opcuaData.PCS1.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS1.history.map((item) =>
+                      item.TPWR_P_REF === -1 ? null : item.TPWR_P_REF
+                    ),
+                    line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "SOC",
+                    x: opcuaData.PCS1.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS1.history.map((item) =>
+                      item.SOC === -1 ? null : item.SOC
+                    ),
+                    line: { color: "#FAB005", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                ]}
+                layout={{
+                  ...commonChartLayout,
+                  title: "PCS1 (2MW)",
+                  uirevision: "pcs1",
+                }}
+                useResizeHandler={true}
+                style={{ width: "100%", height: "100%" }}
+                config={{
+                  responsive: true,
+                  displayModeBar: true,
+                  displaylogo: false,
+                  locale: "ko",
+                  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                }}
+              />
+            </div>
+          )}
+
+          {selectedTab === "PCS2" && (
+            <div className="chart-wrapper">
+              <Plot
+                data={[
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "PCS2 Power",
+                    x: opcuaData.PCS2.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS2.history.map((item) =>
+                      item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
+                    ),
+                    line: { color: "#B197FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                ]}
+                layout={{
+                  ...commonChartLayout,
+                  title: "PCS2",
+                  uirevision: "pcs2",
+                }}
+                useResizeHandler={true}
+                style={{ width: "100%", height: "100%" }}
+                config={{
+                  responsive: true,
+                  displayModeBar: true,
+                  displaylogo: false,
+                  locale: "ko",
+                  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                }}
+              />
+            </div>
+          )}
+
+          {selectedTab === "PCS3" && (
+            <div className="chart-wrapper">
+              <Plot
+                data={[
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "PCS3 Power",
+                    x: opcuaData.PCS3.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS3.history.map((item) =>
+                      item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
+                    ),
+                    line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                ]}
+                layout={{
+                  ...commonChartLayout,
+                  title: "PCS3",
+                  uirevision: "pcs3",
+                }}
+                useResizeHandler={true}
+                style={{ width: "100%", height: "100%" }}
+                config={{
+                  responsive: true,
+                  displayModeBar: true,
+                  displaylogo: false,
+                  locale: "ko",
+                  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                }}
+              />
+            </div>
+          )}
+
+          {selectedTab === "PCS4" && (
+            <div className="chart-wrapper">
+              <Plot
+                data={[
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "PCS4 Power",
+                    x: opcuaData.PCS4.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS4.history.map((item) =>
+                      item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
+                    ),
+                    line: { color: "#FAB005", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                ]}
+                layout={{
+                  ...commonChartLayout,
+                  title: "PCS4",
+                  uirevision: "pcs4",
+                }}
+                useResizeHandler={true}
+                style={{ width: "100%", height: "100%" }}
+                config={{
+                  responsive: true,
+                  displayModeBar: true,
+                  displaylogo: false,
+                  locale: "ko",
+                  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>

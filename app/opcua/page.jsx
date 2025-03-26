@@ -901,14 +901,61 @@ export default function OpcuaPage() {
                   {
                     type: "scatter",
                     mode: "lines",
-                    name: "PCS2 Power",
+                    name: "Filtered Grid Freq",
+                    x: opcuaData.PCS2.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS2.history.map((item) =>
+                      item.Filtered_Grid_Freq === -1
+                        ? null
+                        : item.Filtered_Grid_Freq
+                    ),
+                    line: { color: "#74C0FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REAL",
                     x: opcuaData.PCS2.history.map(
                       (item) => new Date(item.timestamp)
                     ),
                     y: opcuaData.PCS2.history.map((item) =>
                       item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
                     ),
-                    line: { color: "#B197FC", width: 2 },
+                    line: { color: "#FF8787", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REF",
+                    x: opcuaData.PCS2.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS2.history.map((item) =>
+                      item.TPWR_P_REF === -1 ? null : item.TPWR_P_REF
+                    ),
+                    line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "SOC",
+                    x: opcuaData.PCS2.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS2.history.map((item) =>
+                      item.SOC === -1 ? null : item.SOC
+                    ),
+                    line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
                       "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
@@ -939,14 +986,61 @@ export default function OpcuaPage() {
                   {
                     type: "scatter",
                     mode: "lines",
-                    name: "PCS3 Power",
+                    name: "Filtered Grid Freq",
+                    x: opcuaData.PCS3.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS3.history.map((item) =>
+                      item.Filtered_Grid_Freq === -1
+                        ? null
+                        : item.Filtered_Grid_Freq
+                    ),
+                    line: { color: "#74C0FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REAL",
                     x: opcuaData.PCS3.history.map(
                       (item) => new Date(item.timestamp)
                     ),
                     y: opcuaData.PCS3.history.map((item) =>
                       item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
                     ),
+                    line: { color: "#FF8787", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REF",
+                    x: opcuaData.PCS3.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS3.history.map((item) =>
+                      item.TPWR_P_REF === -1 ? null : item.TPWR_P_REF
+                    ),
                     line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "SOC",
+                    x: opcuaData.PCS3.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS3.history.map((item) =>
+                      item.SOC === -1 ? null : item.SOC
+                    ),
+                    line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
                       "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
@@ -977,12 +1071,59 @@ export default function OpcuaPage() {
                   {
                     type: "scatter",
                     mode: "lines",
-                    name: "PCS4 Power",
+                    name: "Filtered Grid Freq",
+                    x: opcuaData.PCS4.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS4.history.map((item) =>
+                      item.Filtered_Grid_Freq === -1
+                        ? null
+                        : item.Filtered_Grid_Freq
+                    ),
+                    line: { color: "#74C0FC", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REAL",
                     x: opcuaData.PCS4.history.map(
                       (item) => new Date(item.timestamp)
                     ),
                     y: opcuaData.PCS4.history.map((item) =>
                       item.TPWR_P_REAL === -1 ? null : item.TPWR_P_REAL
+                    ),
+                    line: { color: "#FF8787", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "TPWR P REF",
+                    x: opcuaData.PCS4.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS4.history.map((item) =>
+                      item.TPWR_P_REF === -1 ? null : item.TPWR_P_REF
+                    ),
+                    line: { color: "#69DB7C", width: 2 },
+                    connectgaps: false,
+                    hovertemplate:
+                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                  },
+                  {
+                    type: "scatter",
+                    mode: "lines",
+                    name: "SOC",
+                    x: opcuaData.PCS4.history.map(
+                      (item) => new Date(item.timestamp)
+                    ),
+                    y: opcuaData.PCS4.history.map((item) =>
+                      item.SOC === -1 ? null : item.SOC
                     ),
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,

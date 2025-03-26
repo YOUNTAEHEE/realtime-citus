@@ -177,11 +177,11 @@ export default function OpcuaPage() {
         setError(null);
         setLoading(false);
 
-        // 과거 데이터 요청 (24시간)
+        // 과거 데이터 요청 (1시간으로 변경)
         socket.send(
           JSON.stringify({
             type: "getHistoricalData",
-            hours: 24,
+            hours: 1,
           })
         );
       };
@@ -198,6 +198,18 @@ export default function OpcuaPage() {
           let message;
           try {
             message = JSON.parse(event.data);
+
+            // 추가: historicalData 메시지 전체 구조 로깅
+            if (message.type === "historicalData") {
+              console.log("과거 데이터 메시지 구조:", {
+                type: message.type,
+                count: message.count || 0,
+                dataType: typeof message.data,
+                isArray: Array.isArray(message.data),
+                hasTimeSeries:
+                  message.data && message.data.timeSeries ? true : false,
+              });
+            }
           } catch (jsonError) {
             console.error("유효하지 않은 JSON 데이터:", jsonError);
             setError("잘못된 데이터 형식을 받았습니다. 서버를 확인하세요.");
@@ -357,13 +369,13 @@ export default function OpcuaPage() {
           Total_TPWR_P_REF: parseFloat(opcData.Total_TPWR_P_REF) || 0,
         };
 
-        // 히스토리에 추가
+        // 히스토리에 추가 (24시간에서 1시간으로 변경)
         const now = new Date();
-        const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const oneHourAgo = new Date(now.getTime() - 1 * 60 * 60 * 1000);
         updatedData.Total.history = [
           ...prevData.Total.history,
           { ...updatedData.Total.data, timestamp },
-        ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
+        ].filter((item) => new Date(item.timestamp) >= oneHourAgo);
 
         // PCS1~4 데이터
         ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
@@ -389,7 +401,7 @@ export default function OpcuaPage() {
           updatedData[pcs].history = [
             ...prevData[pcs].history,
             { ...updatedData[pcs].data, timestamp },
-          ].filter((item) => new Date(item.timestamp) >= oneDayAgo);
+          ].filter((item) => new Date(item.timestamp) >= oneHourAgo);
         });
 
         return updatedData;
@@ -404,24 +416,48 @@ export default function OpcuaPage() {
     }
   };
 
-  // 과거 데이터 처리
+  // 과거 데이터 처리 - 로직 단순화
   const processHistoricalData = (message) => {
+    console.log("과거 데이터 처리 시작", message);
+
+    // 데이터 확인
+    let historicalData = [];
+
+    // 케이스 1: data.timeSeries 배열
     if (
-      !message.data ||
-      !message.data.timeSeries ||
-      message.data.timeSeries.length === 0
+      message.data &&
+      message.data.timeSeries &&
+      Array.isArray(message.data.timeSeries)
     ) {
-      console.warn("과거 데이터가 없습니다");
+      historicalData = message.data.timeSeries;
+      console.log("timeSeries 배열 형식 감지:", historicalData.length);
+    }
+    // 케이스 2: data 자체가 배열
+    else if (message.data && Array.isArray(message.data)) {
+      historicalData = message.data;
+      console.log("data 배열 형식 감지:", historicalData.length);
+    }
+    // 케이스 3: data가 비어있거나 없는 경우
+    else {
+      console.warn("사용 가능한 데이터 형식 없음:", message);
       return;
     }
 
-    const historicalData = message.data.timeSeries;
+    // 실제 레코드가 없는 경우
+    if (historicalData.length === 0) {
+      console.warn("과거 데이터가 없습니다 (빈 배열)");
+      return;
+    }
 
-    // 데이터 그룹화 및 저장
+    // 예시 데이터 출력
+    console.log(
+      "첫 번째 데이터 포인트:",
+      JSON.stringify(historicalData[0], null, 2)
+    );
+
+    // 기존 처리 로직 (간소화하여 유지)...
     setOpcuaData((prevData) => {
       const updatedData = { ...prevData };
-
-      // 그룹별 히스토리 데이터 초기화
       const groupHistory = {
         Total: [],
         PCS1: [],
@@ -430,34 +466,48 @@ export default function OpcuaPage() {
         PCS4: [],
       };
 
-      // 각 타임스탬프별 데이터를 그룹으로 분류
+      // 각 데이터 포인트 처리
       historicalData.forEach((item) => {
-        const timestamp = item.timestamp;
+        if (!item || !item.timestamp) {
+          console.warn("잘못된 데이터 포인트 무시:", item);
+          return;
+        }
 
-        // Total 데이터
-        groupHistory.Total.push({
-          timestamp,
-          Filtered_Grid_Freq: item.Filtered_Grid_Freq || 0,
-          T_Simul_P_REAL: item.T_Simul_P_REAL || 0,
-          Total_TPWR_P_REAL: item.Total_TPWR_P_REAL || 0,
-          Total_TPWR_P_REF: item.Total_TPWR_P_REF || 0,
-        });
+        try {
+          const timestamp = item.timestamp;
 
-        // PCS 데이터
-        ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
-          groupHistory[pcs].push({
+          // Total 데이터
+          groupHistory.Total.push({
             timestamp,
             Filtered_Grid_Freq: item.Filtered_Grid_Freq || 0,
-            TPWR_P_REAL: item[`${pcs}_TPWR_P_REAL`] || 0,
-            TPWR_P_REF: item[`${pcs}_TPWR_P_REF`] || 0,
-            SOC: item[`${pcs}_SOC`] || 0,
+            T_Simul_P_REAL: item.T_Simul_P_REAL || 0,
+            Total_TPWR_P_REAL: item.Total_TPWR_P_REAL || 0,
+            Total_TPWR_P_REF: item.Total_TPWR_P_REF || 0,
           });
-        });
+
+          // PCS 데이터
+          ["PCS1", "PCS2", "PCS3", "PCS4"].forEach((pcs) => {
+            groupHistory[pcs].push({
+              timestamp,
+              Filtered_Grid_Freq: item.Filtered_Grid_Freq || 0,
+              TPWR_P_REAL: item[`${pcs}_TPWR_P_REAL`] || 0,
+              TPWR_P_REF: item[`${pcs}_TPWR_P_REF`] || 0,
+              SOC: item[`${pcs}_SOC`] || 0,
+            });
+          });
+        } catch (err) {
+          console.error("데이터 포인트 처리 중 오류:", err, item);
+        }
       });
 
       // 각 그룹별 데이터 업데이트
       Object.keys(groupHistory).forEach((group) => {
         if (groupHistory[group].length > 0) {
+          console.log(
+            `${group} 그룹 데이터:`,
+            groupHistory[group].length,
+            "개"
+          );
           const latestData =
             groupHistory[group][groupHistory[group].length - 1];
           updatedData[group] = {
@@ -469,6 +519,8 @@ export default function OpcuaPage() {
 
       return updatedData;
     });
+
+    console.log("과거 데이터 처리 완료");
   };
 
   // 타이틀 구성 함수

@@ -1000,12 +1000,23 @@
     gap: 20px;
     margin-bottom: 24px;
 
+    // 작은 화면에서 그리드 조정
+    @media (max-width: 768px) {
+      grid-template-columns: 1fr; // 모바일에서는 한 컬럼으로
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
     .opcua-panel {
       background: white;
       border-radius: 12px;
       padding: 20px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
       transition: transform 0.2s ease;
+
+      @media (max-width: 768px) {
+        padding: 16px; // 모바일에서 패딩 축소
+      }
 
       &:hover {
         transform: translateY(-2px);
@@ -1017,6 +1028,12 @@
         margin: 0 0 16px 0;
         padding-bottom: 12px;
         border-bottom: 2px solid #f1f3f5;
+
+        @media (max-width: 768px) {
+          font-size: 16px;
+          margin: 0 0 12px 0;
+          padding-bottom: 10px;
+        }
       }
 
       .opcua-values {
@@ -1024,11 +1041,25 @@
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
 
+        @media (max-width: 992px) {
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 12px;
+        }
+
+        @media (max-width: 576px) {
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+
         .opcua-card {
           background: #f8f9fa;
           border-radius: 8px;
           padding: 16px;
           transition: all 0.2s ease;
+
+          @media (max-width: 768px) {
+            padding: 12px;
+          }
 
           &:hover {
             background: #e9ecef;
@@ -1040,6 +1071,11 @@
               color: #495057;
               margin: 0 0 8px 0;
               font-weight: 500;
+
+              @media (max-width: 768px) {
+                font-size: 13px;
+                margin: 0 0 6px 0;
+              }
             }
 
             .card-value {
@@ -1047,21 +1083,37 @@
               align-items: baseline;
               gap: 4px;
 
+              @media (max-width: 576px) {
+                justify-content: space-between; // 모바일에서 값 우측 정렬
+              }
+
               .value-number {
                 font-size: 24px;
                 font-weight: 600;
                 color: #228be6;
+
+                @media (max-width: 768px) {
+                  font-size: 20px;
+                }
               }
 
               .value-unit {
                 font-size: 14px;
                 color: #868e96;
+
+                @media (max-width: 768px) {
+                  font-size: 12px;
+                }
               }
 
               .no-data {
                 font-size: 16px;
                 color: #adb5bd;
                 font-style: italic;
+
+                @media (max-width: 768px) {
+                  font-size: 14px;
+                }
               }
             }
           }
@@ -1075,6 +1127,34 @@
 
       .opcua-values {
         grid-template-columns: repeat(4, 1fr); // 4개 컬럼으로 강제
+
+        // 반응형으로 Total 패널 컬럼 수 조정
+        @media (max-width: 1200px) {
+          grid-template-columns: repeat(2, 1fr); // 태블릿에서 2컬럼
+        }
+
+        @media (max-width: 768px) {
+          grid-template-columns: repeat(2, 1fr); // 작은 태블릿에서도 2컬럼
+        }
+
+        @media (max-width: 576px) {
+          grid-template-columns: 1fr; // 모바일에서 1컬럼
+        }
+      }
+    }
+  }
+}
+
+// 모바일에서 가로 스크롤 방지를 위한 추가 설정
+@media (max-width: 576px) {
+  .opcua-card {
+    .card-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .card-title {
+        margin-bottom: 0 !important;
       }
     }
   }

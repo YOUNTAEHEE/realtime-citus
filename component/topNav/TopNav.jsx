@@ -21,6 +21,8 @@ export default function TopNav() {
       router.push("/futureWeatherPage");
     } else if (type === "opcua") {
       router.push("/opcua");
+    } else if (type === "opcuaHistorical") {
+      router.push("/opcuaHistorical");
     }
   };
   return (
@@ -85,6 +87,13 @@ export default function TopNav() {
         onClick={() => handleTopNavClick("opcua")}
       >
         OPC UA
+      </div>
+      <span>|</span>
+      <div
+        className={`top_nav_title ${choice_top_nav === "opcuaHistorical" ? "on" : ""}`}
+        onClick={() => handleTopNavClick("opcuaHistorical")}
+      >
+        OPC UA 히스토리
       </div>
     </div>
   );

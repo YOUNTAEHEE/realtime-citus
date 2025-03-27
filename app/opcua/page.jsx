@@ -739,7 +739,7 @@ export default function OpcuaPage() {
                     line: { color: "#74C0FC", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -754,7 +754,7 @@ export default function OpcuaPage() {
                     line: { color: "#FF8787", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -771,7 +771,7 @@ export default function OpcuaPage() {
                     line: { color: "#69DB7C", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -788,7 +788,7 @@ export default function OpcuaPage() {
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                 ]}
                 layout={{
@@ -828,7 +828,7 @@ export default function OpcuaPage() {
                     line: { color: "#74C0FC", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -843,7 +843,7 @@ export default function OpcuaPage() {
                     line: { color: "#FF8787", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -858,7 +858,7 @@ export default function OpcuaPage() {
                     line: { color: "#69DB7C", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -873,7 +873,7 @@ export default function OpcuaPage() {
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                 ]}
                 layout={{
@@ -913,7 +913,7 @@ export default function OpcuaPage() {
                     line: { color: "#74C0FC", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -928,7 +928,7 @@ export default function OpcuaPage() {
                     line: { color: "#FF8787", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -943,7 +943,7 @@ export default function OpcuaPage() {
                     line: { color: "#69DB7C", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -958,7 +958,7 @@ export default function OpcuaPage() {
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                 ]}
                 layout={{
@@ -998,7 +998,7 @@ export default function OpcuaPage() {
                     line: { color: "#74C0FC", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1013,7 +1013,7 @@ export default function OpcuaPage() {
                     line: { color: "#FF8787", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1028,7 +1028,7 @@ export default function OpcuaPage() {
                     line: { color: "#69DB7C", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1043,7 +1043,7 @@ export default function OpcuaPage() {
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                 ]}
                 layout={{
@@ -1083,7 +1083,7 @@ export default function OpcuaPage() {
                     line: { color: "#74C0FC", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1098,7 +1098,7 @@ export default function OpcuaPage() {
                     line: { color: "#FF8787", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1113,7 +1113,7 @@ export default function OpcuaPage() {
                     line: { color: "#69DB7C", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                   {
                     type: "scatter",
@@ -1128,7 +1128,7 @@ export default function OpcuaPage() {
                     line: { color: "#FAB005", width: 2 },
                     connectgaps: false,
                     hovertemplate:
-                      "<b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+                      "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
                   },
                 ]}
                 layout={{

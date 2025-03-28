@@ -106,34 +106,34 @@ const commonChartLayout = {
 const tabFieldMappings = {
   Total: {
     // 예시: 아래 필드명을 실제 데이터 필드명으로 수정해야 합니다
-    OPC_UA_Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    OPC_UA_T_Simul_P_REAL: "T_Simul_P_REAL",
-    OPC_UA_Total_TPWR_P_REAL: "Total_TPWR_P_REAL",
-    OPC_UA_Total_TPWR_P_REF: "Total_TPWR_P_REF",
+    Filtered_Grid_Freq: "Filtered_Grid_Freq",
+    T_Simul_P_REAL: "T_Simul_P_REAL",
+    Total_TPWR_P_REAL: "Total_TPWR_P_REAL",
+    Total_TPWR_P_REF: "Total_TPWR_P_REF",
   },
   PCS1: {
-    OPC_UA_Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    OPC_UA_PCS1_TPWR_P_REAL: "PCS1_TPWR_P_REAL",
-    OPC_UA_PCS1_TPWR_P_REF: "PCS1_TPWR_P_REF",
-    OPC_UA_PCS1_SOC: "PCS1_SOC",
+    Filtered_Grid_Freq: "Filtered_Grid_Freq",
+    PCS1_TPWR_P_REAL: "PCS1_TPWR_P_REAL",
+    PCS1_TPWR_P_REF: "PCS1_TPWR_P_REF",
+    PCS1_SOC: "PCS1_SOC",
   },
   PCS2: {
-    OPC_UA_Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    OPC_UA_PCS2_TPWR_P_REAL: "PCS2_TPWR_P_REAL",
-    OPC_UA_PCS2_TPWR_P_REF: "PCS2_TPWR_P_REF",
-    OPC_UA_PCS2_SOC: "PCS2_SOC",
+    Filtered_Grid_Freq: "Filtered_Grid_Freq",
+    PCS2_TPWR_P_REAL: "PCS2_TPWR_P_REAL",
+    PCS2_TPWR_P_REF: "PCS2_TPWR_P_REF",
+    PCS2_SOC: "PCS2_SOC",
   },
   PCS3: {
-    OPC_UA_Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    OPC_UA_PCS3_TPWR_P_REAL: "PCS3_TPWR_P_REAL",
-    OPC_UA_PCS3_TPWR_P_REF: "PCS3_TPWR_P_REF",
-    OPC_UA_PCS3_SOC: "PCS3_SOC",
+    Filtered_Grid_Freq: "Filtered_Grid_Freq",
+    PCS3_TPWR_P_REAL: "PCS3_TPWR_P_REAL",
+    PCS3_TPWR_P_REF: "PCS3_TPWR_P_REF",
+    PCS3_SOC: "PCS3_SOC",
   },
   PCS4: {
-    OPC_UA_Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    OPC_UA_PCS4_TPWR_P_REAL: "PCS4_TPWR_P_REAL",
-    OPC_UA_PCS4_TPWR_P_REF: "PCS4_TPWR_P_REF",
-    OPC_UA_PCS4_SOC: "PCS4_SOC",
+    Filtered_Grid_Freq: "Filtered_Grid_Freq",
+    PCS4_TPWR_P_REAL: "PCS4_TPWR_P_REAL",
+    PCS4_TPWR_P_REF: "PCS4_TPWR_P_REF",
+    PCS4_SOC: "PCS4_SOC",
   },
 };
 
@@ -238,7 +238,7 @@ export default function OpcuaHistoricalPage() {
 
       // URL 디버깅
       console.log("요청 URL:", `${apiUrl}/api/opcua/historical`);
-
+      console.log("selectedTab:", selectedTab);
       const response = await fetch(`${apiUrl}/api/opcua/historical`, {
         method: "POST",
         headers: {
@@ -247,7 +247,7 @@ export default function OpcuaHistoricalPage() {
         body: JSON.stringify({
           startTime: startDate.toISOString(),
           endTime: endDate.toISOString(),
-          deviceGroup: selectedTab.toLowerCase(),
+          deviceGroup: selectedTab,
         }),
       });
 

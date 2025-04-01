@@ -320,7 +320,7 @@ export default function OpcuaHistoricalPage() {
   return (
     <div className="opcua-container">
       <div className="header">
-        <h1>OPC UA 과거 데이터 조회</h1>
+        <h1>과거 데이터 조회</h1>
         <div className="date-picker-container">
           <DatePicker
             selected={startDate}

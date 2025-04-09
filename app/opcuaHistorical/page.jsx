@@ -185,7 +185,7 @@ export default function OpcuaHistoricalPage() {
   });
   const [selectedTab, setSelectedTab] = useState("Total");
   const [startDate, setStartDate] = useState(
-    new Date(Date.now() - 3 * 60 * 60 * 1000) // 기본값은 3시간 전
+    new Date(Date.now() - 3 * 60 * 60 * 1000)
   );
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
@@ -195,31 +195,142 @@ export default function OpcuaHistoricalPage() {
     fetchHistoricalData();
   }, [selectedTab]);
 
-  // 시작 날짜가 변경될 때 3시간 초과 체크
-  const handleStartDateChange = (date) => {
-    const threeHoursLater = new Date(date.getTime() + 3 * 60 * 60 * 1000);
+  // --- 수정된 날짜 범위 업데이트 함수 (1~3시간 범위 허용) ---
+  /**
+   * 날짜 범위를 업데이트하고 1~3시간 제한을 적용합니다.
+   * 간격이 1시간 미만이거나 3시간 초과 시에만 다른 쪽 날짜를 조정합니다.
+   * @param {Date} changedDate 사용자가 DatePicker에서 선택/변경된 날짜
+   * @param {'start' | 'end'} changeSource 어떤 DatePicker가 변경되었는지 ('start' 또는 'end')
+   */
+  const updateDateRange = (changedDate, changeSource) => {
+    const minDuration = 1 * 60 * 60 * 1000; // 1시간
+    const maxDuration = 3 * 60 * 60 * 1000; // 3시간
+    const now = new Date();
+    let potentialStart;
+    let potentialEnd;
 
-    // 시작 시간 + 3시간이 현재 종료 시간보다 이전이면 시작 시간만 업데이트
-    if (threeHoursLater <= endDate) {
-      setStartDate(date);
+    // 1. Determine the potential start and end based on the change, validating against now
+    if (changeSource === "start") {
+      potentialStart = changedDate > now ? now : changedDate;
+      potentialEnd = endDate; // Keep the other date for now
     } else {
-      // 아니면 시작 시간 업데이트 후 종료 시간도 3시간 후로 업데이트
-      setStartDate(date);
-      setEndDate(threeHoursLater);
+      // changeSource === 'end'
+      potentialEnd = changedDate > now ? now : changedDate;
+      potentialStart = startDate; // Keep the other date for now
+    }
+
+    // 2. Ensure start is not after end (basic validity) - Adjust the *other* date
+    if (potentialStart > potentialEnd) {
+      console.log(
+        "기본 유효성: 시작 시간이 종료 시간보다 늦습니다. 최소 간격(1시간)으로 조정합니다."
+      );
+      if (changeSource === "start") {
+        // Start was moved after End
+        potentialEnd = new Date(potentialStart.getTime() + minDuration);
+        if (potentialEnd > now) potentialEnd = now; // Clamp end
+        // Re-check if start is still > end after clamping end
+        if (potentialStart > potentialEnd) {
+          potentialStart = new Date(potentialEnd.getTime() - minDuration);
+        }
+      } else {
+        // End was moved before Start
+        potentialStart = new Date(potentialEnd.getTime() - minDuration);
+      }
+      // Ensure start is not negative
+      if (potentialStart < new Date(0)) potentialStart = new Date(0);
+    }
+
+    // 3. Calculate the duration
+    let currentDuration = potentialEnd.getTime() - potentialStart.getTime();
+
+    // 4. Adjust ONLY if duration is outside the 1-3 hour range
+    let finalStart = potentialStart;
+    let finalEnd = potentialEnd;
+
+    if (currentDuration < minDuration) {
+      console.log(
+        `범위 부족 (${(currentDuration / (60 * 60 * 1000)).toFixed(
+          1
+        )}시간 < 1시간). ${changeSource} 날짜 기준으로 1시간 조정.`
+      );
+      if (changeSource === "start") {
+        finalEnd = new Date(finalStart.getTime() + minDuration);
+      } else {
+        finalStart = new Date(finalEnd.getTime() - minDuration);
+      }
+    } else if (currentDuration > maxDuration) {
+      console.log(
+        `범위 초과 (${(currentDuration / (60 * 60 * 1000)).toFixed(
+          1
+        )}시간 > 3시간). ${changeSource} 날짜 기준으로 3시간 조정.`
+      );
+      if (changeSource === "start") {
+        finalEnd = new Date(finalStart.getTime() + maxDuration);
+      } else {
+        finalStart = new Date(finalEnd.getTime() - maxDuration);
+      }
+    }
+    // Else (1h <= duration <= 3h): No adjustment needed for duration, use potentialStart/End
+
+    // 5. Final validation against 'now' for the potentially adjusted dates
+    // Clamp the end date first
+    if (finalEnd > now) {
+      finalEnd = now;
+      console.log("최종 종료 시간을 'now'로 제한합니다.");
+      // If end is clamped, re-check start to ensure minimum duration and start <= end
+      if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
+        finalStart = new Date(finalEnd.getTime() - minDuration);
+        console.log(
+          "종료 시간 'now' 제한 후 최소 시간(1시간) 보장을 위해 시작 시간 재조정."
+        );
+      }
+      // Ensure start is not after (clamped) end
+      if (finalStart > finalEnd) {
+        finalStart = new Date(finalEnd.getTime() - minDuration); // Fallback
+      }
+    }
+    // Ensure start date is also clamped (in case it was adjusted past now, unlikely but possible)
+    if (finalStart > now) {
+      finalStart = now;
+      console.log("최종 시작 시간을 'now'로 제한합니다.");
+      // If start is clamped to now, re-adjust end to ensure min duration
+      if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
+        finalEnd = new Date(finalStart.getTime() + minDuration);
+        if (finalEnd > now) finalEnd = now; // Clamp end again if needed
+      }
+    }
+
+    // Ensure start is not negative after all adjustments
+    if (finalStart < new Date(0)) finalStart = new Date(0);
+
+    // Final safety check: Ensure start <= end one last time
+    if (finalStart > finalEnd) {
+      console.warn(
+        "최종 조정 후 시작 시간이 종료 시간보다 늦어, 시작 시간을 강제로 1시간 전으로 조정합니다."
+      );
+      finalStart = new Date(finalEnd.getTime() - minDuration);
+      if (finalStart < new Date(0)) finalStart = new Date(0);
+    }
+
+    // 6. Update state
+    setStartDate(finalStart);
+    setEndDate(finalEnd);
+    console.log("최종 설정된 시간:", {
+      start: finalStart.toISOString(),
+      end: finalEnd.toISOString(),
+    });
+  };
+
+  // handleStartDateChange and handleEndDateChange remain the same as the previous version:
+  const handleStartDateChange = (date) => {
+    if (date) {
+      updateDateRange(date, "start");
     }
   };
 
-  // 종료 날짜가 변경될 때 3시간 초과 체크
   const handleEndDateChange = (date) => {
-    const threeHoursBefore = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-
-    // 종료 시간 - 3시간이 현재 시작 시간보다 이후면 종료 시간만 업데이트
-    if (threeHoursBefore >= startDate) {
-      setEndDate(date);
-    } else {
-      // 아니면 종료 시간 업데이트 후 시작 시간도 3시간 전으로 업데이트
-      setEndDate(date);
-      setStartDate(threeHoursBefore);
+    if (date) {
+      updateDateRange(date, "end");
     }
   };
 
@@ -340,6 +451,7 @@ export default function OpcuaHistoricalPage() {
             dateFormat="yyyy-MM-dd HH:mm"
             className="date-picker"
             maxDate={new Date()}
+            minDate={startDate}
           />
           <button onClick={fetchHistoricalData} className="search-button">
             조회

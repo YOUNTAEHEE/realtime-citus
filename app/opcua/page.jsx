@@ -534,7 +534,7 @@ export default function OpcuaPage() {
         return group;
     }
   };
-
+  
   return (
     <div className="opcua-container">
       <div className="header">

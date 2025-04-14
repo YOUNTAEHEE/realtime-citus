@@ -144,6 +144,22 @@ const getFilteredChartData = (historyData, tab) => {
   const fieldMapping = tabFieldMappings[tab];
   if (!fieldMapping) return [];
 
+  // === 추가: new Date() 변환 결과 확인 ===
+  console.log(`Convert (${tab}) - historyData 개수:`, historyData.length);
+  historyData.slice(0, 5).forEach((item, index) => {
+    // 처음 5개 항목만 로그
+    console.log(`Convert (${tab})[${index}] - 입력 문자열:`, item.timestamp);
+    const dateObject = new Date(item.timestamp);
+    console.log(`Convert (${tab})[${index}] - 변환된 Date 객체:`, dateObject);
+    // Invalid Date 확인
+    if (isNaN(dateObject.getTime())) {
+      console.error(
+        `Convert (${tab})[${index}] - Error: Invalid Date 객체 생성됨!`
+      );
+    }
+  });
+  // ====================================
+
   const colors = ["#74C0FC", "#FF8787", "#69DB7C", "#FAB005"];
 
   return Object.entries(fieldMapping)
@@ -202,125 +218,173 @@ export default function OpcuaHistoricalPage() {
    * @param {Date} changedDate 사용자가 DatePicker에서 선택/변경된 날짜
    * @param {'start' | 'end'} changeSource 어떤 DatePicker가 변경되었는지 ('start' 또는 'end')
    */
+  // const updateDateRange = (changedDate, changeSource) => {
+  //   const minDuration = 1 * 60 * 60 * 1000; // 1시간
+  //   const maxDuration = 3 * 60 * 60 * 1000; // 3시간
+  //   const now = new Date();
+  //   let potentialStart;
+  //   let potentialEnd;
+
+  //   // 1. Determine the potential start and end based on the change, validating against now
+  //   if (changeSource === "start") {
+  //     potentialStart = changedDate > now ? now : changedDate;
+  //     potentialEnd = endDate; // Keep the other date for now
+  //   } else {
+  //     // changeSource === 'end'
+  //     potentialEnd = changedDate > now ? now : changedDate;
+  //     potentialStart = startDate; // Keep the other date for now
+  //   }
+
+  //   // 2. Ensure start is not after end (basic validity) - Adjust the *other* date
+  //   if (potentialStart > potentialEnd) {
+  //     console.log(
+  //       "기본 유효성: 시작 시간이 종료 시간보다 늦습니다. 최소 간격(1시간)으로 조정합니다."
+  //     );
+  //     if (changeSource === "start") {
+  //       // Start was moved after End
+  //       potentialEnd = new Date(potentialStart.getTime() + minDuration);
+  //       if (potentialEnd > now) potentialEnd = now; // Clamp end
+  //       // Re-check if start is still > end after clamping end
+  //       if (potentialStart > potentialEnd) {
+  //         potentialStart = new Date(potentialEnd.getTime() - minDuration);
+  //       }
+  //     } else {
+  //       // End was moved before Start
+  //       potentialStart = new Date(potentialEnd.getTime() - minDuration);
+  //     }
+  //     // Ensure start is not negative
+  //     if (potentialStart < new Date(0)) potentialStart = new Date(0);
+  //   }
+
+  //   // 3. Calculate the duration
+  //   let currentDuration = potentialEnd.getTime() - potentialStart.getTime();
+
+  //   // 4. Adjust ONLY if duration is outside the 1-3 hour range
+  //   let finalStart = potentialStart;
+  //   let finalEnd = potentialEnd;
+
+  //   if (currentDuration < minDuration) {
+  //     console.log(
+  //       `범위 부족 (${(currentDuration / (60 * 60 * 1000)).toFixed(
+  //         1
+  //       )}시간 < 1시간). ${changeSource} 날짜 기준으로 1시간 조정.`
+  //     );
+  //     if (changeSource === "start") {
+  //       finalEnd = new Date(finalStart.getTime() + minDuration);
+  //     } else {
+  //       finalStart = new Date(finalEnd.getTime() - minDuration);
+  //     }
+  //   } else if (currentDuration > maxDuration) {
+  //     console.log(
+  //       `범위 초과 (${(currentDuration / (60 * 60 * 1000)).toFixed(
+  //         1
+  //       )}시간 > 3시간). ${changeSource} 날짜 기준으로 3시간 조정.`
+  //     );
+  //     if (changeSource === "start") {
+  //       finalEnd = new Date(finalStart.getTime() + maxDuration);
+  //     } else {
+  //       finalStart = new Date(finalEnd.getTime() - maxDuration);
+  //     }
+  //   }
+  //   // Else (1h <= duration <= 3h): No adjustment needed for duration, use potentialStart/End
+
+  //   // 5. Final validation against 'now' for the potentially adjusted dates
+  //   // Clamp the end date first
+  //   if (finalEnd > now) {
+  //     finalEnd = now;
+  //     console.log("최종 종료 시간을 'now'로 제한합니다.");
+  //     // If end is clamped, re-check start to ensure minimum duration and start <= end
+  //     if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
+  //       finalStart = new Date(finalEnd.getTime() - minDuration);
+  //       console.log(
+  //         "종료 시간 'now' 제한 후 최소 시간(1시간) 보장을 위해 시작 시간 재조정."
+  //       );
+  //     }
+  //     // Ensure start is not after (clamped) end
+  //     if (finalStart > finalEnd) {
+  //       finalStart = new Date(finalEnd.getTime() - minDuration); // Fallback
+  //     }
+  //   }
+  //   // Ensure start date is also clamped (in case it was adjusted past now, unlikely but possible)
+  //   if (finalStart > now) {
+  //     finalStart = now;
+  //     console.log("최종 시작 시간을 'now'로 제한합니다.");
+  //     // If start is clamped to now, re-adjust end to ensure min duration
+  //     if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
+  //       finalEnd = new Date(finalStart.getTime() + minDuration);
+  //       if (finalEnd > now) finalEnd = now; // Clamp end again if needed
+  //     }
+  //   }
+
+  //   // Ensure start is not negative after all adjustments
+  //   if (finalStart < new Date(0)) finalStart = new Date(0);
+
+  //   // Final safety check: Ensure start <= end one last time
+  //   if (finalStart > finalEnd) {
+  //     console.warn(
+  //       "최종 조정 후 시작 시간이 종료 시간보다 늦어, 시작 시간을 강제로 1시간 전으로 조정합니다."
+  //     );
+  //     finalStart = new Date(finalEnd.getTime() - minDuration);
+  //     if (finalStart < new Date(0)) finalStart = new Date(0);
+  //   }
+
+  //   // 6. Update state
+  //   setStartDate(finalStart);
+  //   setEndDate(finalEnd);
+  //   console.log("최종 설정된 시간:", {
+  //     start: finalStart.toISOString(),
+  //     end: finalEnd.toISOString(),
+  //   });
+  // };
   const updateDateRange = (changedDate, changeSource) => {
-    const minDuration = 1 * 60 * 60 * 1000; // 1시간
     const maxDuration = 3 * 60 * 60 * 1000; // 3시간
     const now = new Date();
-    let potentialStart;
-    let potentialEnd;
-
-    // 1. Determine the potential start and end based on the change, validating against now
+    let potentialStart, potentialEnd;
+  
     if (changeSource === "start") {
       potentialStart = changedDate > now ? now : changedDate;
-      potentialEnd = endDate; // Keep the other date for now
+      potentialEnd = endDate;
     } else {
-      // changeSource === 'end'
       potentialEnd = changedDate > now ? now : changedDate;
-      potentialStart = startDate; // Keep the other date for now
+      potentialStart = startDate;
     }
-
-    // 2. Ensure start is not after end (basic validity) - Adjust the *other* date
+  
+    // 종료가 시작보다 빠를 수 없도록 처리
     if (potentialStart > potentialEnd) {
-      console.log(
-        "기본 유효성: 시작 시간이 종료 시간보다 늦습니다. 최소 간격(1시간)으로 조정합니다."
-      );
       if (changeSource === "start") {
-        // Start was moved after End
-        potentialEnd = new Date(potentialStart.getTime() + minDuration);
-        if (potentialEnd > now) potentialEnd = now; // Clamp end
-        // Re-check if start is still > end after clamping end
-        if (potentialStart > potentialEnd) {
-          potentialStart = new Date(potentialEnd.getTime() - minDuration);
-        }
+        potentialEnd = potentialStart;
       } else {
-        // End was moved before Start
-        potentialStart = new Date(potentialEnd.getTime() - minDuration);
+        potentialStart = potentialEnd;
       }
-      // Ensure start is not negative
-      if (potentialStart < new Date(0)) potentialStart = new Date(0);
     }
-
-    // 3. Calculate the duration
-    let currentDuration = potentialEnd.getTime() - potentialStart.getTime();
-
-    // 4. Adjust ONLY if duration is outside the 1-3 hour range
-    let finalStart = potentialStart;
-    let finalEnd = potentialEnd;
-
-    if (currentDuration < minDuration) {
-      console.log(
-        `범위 부족 (${(currentDuration / (60 * 60 * 1000)).toFixed(
-          1
-        )}시간 < 1시간). ${changeSource} 날짜 기준으로 1시간 조정.`
-      );
+  
+    // 💡 최대 3시간 초과 제한
+    let duration = potentialEnd.getTime() - potentialStart.getTime();
+    if (duration > maxDuration) {
       if (changeSource === "start") {
-        finalEnd = new Date(finalStart.getTime() + minDuration);
+        potentialEnd = new Date(potentialStart.getTime() + maxDuration);
       } else {
-        finalStart = new Date(finalEnd.getTime() - minDuration);
-      }
-    } else if (currentDuration > maxDuration) {
-      console.log(
-        `범위 초과 (${(currentDuration / (60 * 60 * 1000)).toFixed(
-          1
-        )}시간 > 3시간). ${changeSource} 날짜 기준으로 3시간 조정.`
-      );
-      if (changeSource === "start") {
-        finalEnd = new Date(finalStart.getTime() + maxDuration);
-      } else {
-        finalStart = new Date(finalEnd.getTime() - maxDuration);
+        potentialStart = new Date(potentialEnd.getTime() - maxDuration);
       }
     }
-    // Else (1h <= duration <= 3h): No adjustment needed for duration, use potentialStart/End
-
-    // 5. Final validation against 'now' for the potentially adjusted dates
-    // Clamp the end date first
-    if (finalEnd > now) {
-      finalEnd = now;
-      console.log("최종 종료 시간을 'now'로 제한합니다.");
-      // If end is clamped, re-check start to ensure minimum duration and start <= end
-      if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
-        finalStart = new Date(finalEnd.getTime() - minDuration);
-        console.log(
-          "종료 시간 'now' 제한 후 최소 시간(1시간) 보장을 위해 시작 시간 재조정."
-        );
-      }
-      // Ensure start is not after (clamped) end
-      if (finalStart > finalEnd) {
-        finalStart = new Date(finalEnd.getTime() - minDuration); // Fallback
+  
+    // 현재 시간 넘어가지 않도록 제한
+    if (potentialEnd > now) {
+      potentialEnd = now;
+      if (potentialEnd.getTime() - potentialStart.getTime() > maxDuration) {
+        potentialStart = new Date(potentialEnd.getTime() - maxDuration);
       }
     }
-    // Ensure start date is also clamped (in case it was adjusted past now, unlikely but possible)
-    if (finalStart > now) {
-      finalStart = now;
-      console.log("최종 시작 시간을 'now'로 제한합니다.");
-      // If start is clamped to now, re-adjust end to ensure min duration
-      if (finalEnd.getTime() - finalStart.getTime() < minDuration) {
-        finalEnd = new Date(finalStart.getTime() + minDuration);
-        if (finalEnd > now) finalEnd = now; // Clamp end again if needed
-      }
-    }
-
-    // Ensure start is not negative after all adjustments
-    if (finalStart < new Date(0)) finalStart = new Date(0);
-
-    // Final safety check: Ensure start <= end one last time
-    if (finalStart > finalEnd) {
-      console.warn(
-        "최종 조정 후 시작 시간이 종료 시간보다 늦어, 시작 시간을 강제로 1시간 전으로 조정합니다."
-      );
-      finalStart = new Date(finalEnd.getTime() - minDuration);
-      if (finalStart < new Date(0)) finalStart = new Date(0);
-    }
-
-    // 6. Update state
-    setStartDate(finalStart);
-    setEndDate(finalEnd);
+  
+    setStartDate(potentialStart);
+    setEndDate(potentialEnd);
+  
     console.log("최종 설정된 시간:", {
-      start: finalStart.toISOString(),
-      end: finalEnd.toISOString(),
+      start: potentialStart.toISOString(),
+      end: potentialEnd.toISOString(),
     });
   };
-
+  
   // handleStartDateChange and handleEndDateChange remain the same as the previous version:
   const handleStartDateChange = (date) => {
     if (date) {
@@ -346,6 +410,12 @@ export default function OpcuaHistoricalPage() {
         종료: endDate.toISOString(),
         간격_시간: (endDate - startDate) / (1000 * 60 * 60),
       });
+      const startTimeISO = startDate.toISOString();
+      const endTimeISO = endDate.toISOString();
+      console.log("실제 전송될 ISO 시간:", {
+        start: startTimeISO,
+        end: endTimeISO,
+      }); // 전송 직전 값 확인
 
       // URL 디버깅
       console.log("요청 URL:", `${apiUrl}/api/opcua/historical`);
@@ -356,8 +426,8 @@ export default function OpcuaHistoricalPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          startTime: startDate.toISOString(),
-          endTime: endDate.toISOString(),
+          startTime: startTimeISO, // 확인된 변수 사용
+          endTime: endTimeISO, // 확인된 변수 사용
           deviceGroup: selectedTab,
         }),
       });
@@ -370,6 +440,8 @@ export default function OpcuaHistoricalPage() {
       }
 
       const data = await response.json();
+      console.log("processHistoricalData 진입 시 data:", data);
+
       console.log("응답 데이터 항목 수:", data.data?.timeSeries?.length || 0);
 
       processHistoricalData(data);
@@ -383,9 +455,19 @@ export default function OpcuaHistoricalPage() {
 
   const processHistoricalData = (data) => {
     try {
-      // 데이터가 timeSeries 형태로 왔는지 확인
-      const historyData = data.data?.timeSeries || [];
-      console.log("원본 데이터 수신:", historyData.length);
+      const historyData = data.data.timeSeries || [];
+      console.log("Process - 원본 데이터 수신:", historyData.length);
+
+      // === 추가: 첫 번째 데이터의 timestamp 로그 확인 ===
+      if (historyData.length > 0) {
+        console.log("Process - 첫 번째 데이터 항목 전체:", historyData[0]);
+        console.log(
+          "Process - 첫 번째 timestamp 문자열:",
+          historyData[0]?.timestamp
+        ); // timestamp 필드 확인
+        console.log("Process - 실제 필드 목록:", Object.keys(historyData[0]));
+      }
+      // ============================================
 
       if (historyData.length > 0) {
         // 첫 번째 데이터 항목의 모든 필드를 출력

@@ -81,13 +81,13 @@ export default function TopNav() {
       >
         단기예보
       </div> */}
-      <span>|</span>
+      {/* <span>|</span>
       <div
         className={`top_nav_title ${choice_top_nav === "opcua" ? "on" : ""}`}
         onClick={() => handleTopNavClick("opcua")}
       >
         OPC UA
-      </div>
+      </div> */}
       <span>|</span>
       <div
         className={`top_nav_title ${choice_top_nav === "opcuaHistorical" ? "on" : ""}`}

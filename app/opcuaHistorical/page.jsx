@@ -676,7 +676,7 @@ export default function OpcuaHistoricalPage() {
   return (
     <div className="opcua-container">
       <div className="header">
-        <h1>과거 데이터 조회</h1>
+        <h1>LPMS Historian</h1>
         <div className="date-picker-container">
           <DatePicker
             selected={startDate}
@@ -722,7 +722,7 @@ export default function OpcuaHistoricalPage() {
       </div>
 
       {error && <div className="error-message">{error}</div>}
-      {loading && <div className="loading">데이터 로딩 중...</div>}
+      {/* 전역 로딩 표시는 제거 또는 유지 */}
 
       {/* 차트 영역 */}
       <div className="chart-section">
@@ -759,7 +759,11 @@ export default function OpcuaHistoricalPage() {
         <div className="chart-container">
           {selectedTab === "Total" && (
             <div className="chart-wrapper">
-              {opcuaData.Total.history.length === 0 ? (
+              {loading ? (
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : opcuaData.Total.history.length === 0 ? (
                 <div
                   className="no-data-message"
                   style={{
@@ -810,7 +814,11 @@ export default function OpcuaHistoricalPage() {
 
           {selectedTab === "PCS1" && (
             <div className="chart-wrapper">
-              {opcuaData.PCS1.history.length === 0 ? (
+              {loading ? (
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : opcuaData.PCS1.history.length === 0 ? (
                 <div
                   className="no-data-message"
                   style={{
@@ -861,7 +869,11 @@ export default function OpcuaHistoricalPage() {
 
           {selectedTab === "PCS2" && (
             <div className="chart-wrapper">
-              {opcuaData.PCS2.history.length === 0 ? (
+              {loading ? (
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : opcuaData.PCS2.history.length === 0 ? (
                 <div
                   className="no-data-message"
                   style={{
@@ -912,7 +924,11 @@ export default function OpcuaHistoricalPage() {
 
           {selectedTab === "PCS3" && (
             <div className="chart-wrapper">
-              {opcuaData.PCS3.history.length === 0 ? (
+              {loading ? (
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : opcuaData.PCS3.history.length === 0 ? (
                 <div
                   className="no-data-message"
                   style={{
@@ -963,7 +979,11 @@ export default function OpcuaHistoricalPage() {
 
           {selectedTab === "PCS4" && (
             <div className="chart-wrapper">
-              {opcuaData.PCS4.history.length === 0 ? (
+              {loading ? (
+                <div className="loading-spinner-container">
+                  <div className="loading-spinner"></div>
+                </div>
+              ) : opcuaData.PCS4.history.length === 0 ? (
                 <div
                   className="no-data-message"
                   style={{

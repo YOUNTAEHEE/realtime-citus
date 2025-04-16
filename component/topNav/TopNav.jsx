@@ -27,14 +27,15 @@ export default function TopNav() {
   };
   return (
     <div className="top_nav_wrap">
-      <div
+      {/* <div
         className={`top_nav_title ${
           choice_top_nav === "calculator" ? "on" : ""
         }`}
         onClick={() => handleTopNavClick("calculator")}
       >
         계산기
-      </div>
+      </div> */}
+      {/* 삭제 */}
       {/* <span>|</span>
       <div
         className={`top_nav_title ${choice_top_nav === "weather" ? "on" : ""}`}
@@ -42,7 +43,8 @@ export default function TopNav() {
       >
         기상청
       </div> */}
-      <span>|</span>
+      {/* 삭제끝 */}
+      {/* <span>|</span>
       <div
         className={`top_nav_title ${
           choice_top_nav === "weatherpage" ? "on" : ""
@@ -73,7 +75,8 @@ export default function TopNav() {
         onClick={() => handleTopNavClick("realtime2")}
       >
         실시간2(DB쿼리)
-      </div>
+      </div> */}
+      {/* 삭제 */}
       {/* <span>|</span>
       <div
         className={`top_nav_title ${choice_top_nav === "futureWeatherPage" ? "on" : ""}`}
@@ -88,12 +91,13 @@ export default function TopNav() {
       >
         OPC UA
       </div> */}
-      <span>|</span>
+      {/* 삭제끝 */}
+      {/* <span>|</span> */}
       <div
         className={`top_nav_title ${choice_top_nav === "opcuaHistorical" ? "on" : ""}`}
         onClick={() => handleTopNavClick("opcuaHistorical")}
       >
-        OPC UA 히스토리
+        LPMS Historian
       </div>
     </div>
   );

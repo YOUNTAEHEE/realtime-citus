@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { memo, useEffect, useState } from "react";
+import { memo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../opcua/realtimeOpcua.scss";
@@ -82,8 +82,8 @@ const commonChartLayout = {
     borderwidth: 1,
     itemsizing: "constant",
     itemwidth: 40,
-    itemclick: false,
-    itemdoubleclick: false,
+    itemclick: "toggle", // ✅ 클릭하면 숨기기/보이기
+    itemdoubleclick: "toggleothers", // ✅ 더블클릭하면 나머지 다 숨기고 이것만 보기
   },
   modebar: {
     bgcolor: "rgba(255, 255, 255, 0.8)",
@@ -103,79 +103,134 @@ const commonChartLayout = {
 };
 
 // 탭별 필드 매핑 수정 - 실제 데이터 필드명으로 수정 필요
-const tabFieldMappings = {
-  Total: {
-    // 예시: 아래 필드명을 실제 데이터 필드명으로 수정해야 합니다
-    Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    T_Simul_P_REAL: "T_Simul_P_REAL",
-    Total_TPWR_P_REAL: "Total_TPWR_P_REAL",
-    Total_TPWR_P_REF: "Total_TPWR_P_REF",
-  },
-  PCS1: {
-    Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    PCS1_TPWR_P_REAL: "PCS1_TPWR_P_REAL",
-    PCS1_TPWR_P_REF: "PCS1_TPWR_P_REF",
-    PCS1_SOC: "PCS1_SOC",
-  },
-  PCS2: {
-    Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    PCS2_TPWR_P_REAL: "PCS2_TPWR_P_REAL",
-    PCS2_TPWR_P_REF: "PCS2_TPWR_P_REF",
-    PCS2_SOC: "PCS2_SOC",
-  },
-  PCS3: {
-    Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    PCS3_TPWR_P_REAL: "PCS3_TPWR_P_REAL",
-    PCS3_TPWR_P_REF: "PCS3_TPWR_P_REF",
-    PCS3_SOC: "PCS3_SOC",
-  },
-  PCS4: {
-    Filtered_Grid_Freq: "Filtered_Grid_Freq",
-    PCS4_TPWR_P_REAL: "PCS4_TPWR_P_REAL",
-    PCS4_TPWR_P_REF: "PCS4_TPWR_P_REF",
-    PCS4_SOC: "PCS4_SOC",
-  },
-};
+// const tabFieldMappings = {
+//   Total: {
+//     // 예시: 아래 필드명을 실제 데이터 필드명으로 수정해야 합니다
+//     Filtered_Grid_Freq: "Filtered_Grid_Freq",
+//     T_Simul_P_REAL: "T_Simul_P_REAL",
+//     Total_TPWR_P_REAL: "Total_TPWR_P_REAL",
+//     Total_TPWR_P_REF: "Total_TPWR_P_REF",
+//   },
+//   PCS1: {
+//     Filtered_Grid_Freq: "Filtered_Grid_Freq",
+//     PCS1_TPWR_P_REAL: "PCS1_TPWR_P_REAL",
+//     PCS1_TPWR_P_REF: "PCS1_TPWR_P_REF",
+//     PCS1_SOC: "PCS1_SOC",
+//   },
+//   PCS2: {
+//     Filtered_Grid_Freq: "Filtered_Grid_Freq",
+//     PCS2_TPWR_P_REAL: "PCS2_TPWR_P_REAL",
+//     PCS2_TPWR_P_REF: "PCS2_TPWR_P_REF",
+//     PCS2_SOC: "PCS2_SOC",
+//   },
+//   PCS3: {
+//     Filtered_Grid_Freq: "Filtered_Grid_Freq",
+//     PCS3_TPWR_P_REAL: "PCS3_TPWR_P_REAL",
+//     PCS3_TPWR_P_REF: "PCS3_TPWR_P_REF",
+//     PCS3_SOC: "PCS3_SOC",
+//   },
+//   PCS4: {
+//     Filtered_Grid_Freq: "Filtered_Grid_Freq",
+//     PCS4_TPWR_P_REAL: "PCS4_TPWR_P_REAL",
+//     PCS4_TPWR_P_REF: "PCS4_TPWR_P_REF",
+//     PCS4_SOC: "PCS4_SOC",
+//   },
+// };
 
 // getFilteredChartData 함수에서 더 포괄적인 데이터 처리
-const getFilteredChartData = (historyData, tab) => {
+// const getFilteredChartData = (historyData, tab) => {
+//   if (!historyData || historyData.length === 0) return [];
+
+//   const fieldMapping = tabFieldMappings[tab];
+//   if (!fieldMapping) return [];
+
+//   // === 추가: new Date() 변환 결과 확인 ===
+//   console.log(`Convert (${tab}) - historyData 개수:`, historyData.length);
+//   historyData.slice(0, 5).forEach((item, index) => {
+//     // 처음 5개 항목만 로그
+//     console.log(`Convert (${tab})[${index}] - 입력 문자열:`, item.timestamp);
+//     const dateObject = new Date(item.timestamp);
+//     console.log(`Convert (${tab})[${index}] - 변환된 Date 객체:`, dateObject);
+//     // Invalid Date 확인
+//     if (isNaN(dateObject.getTime())) {
+//       console.error(
+//         `Convert (${tab})[${index}] - Error: Invalid Date 객체 생성됨!`
+//       );
+//     }
+//   });
+//   // ====================================
+
+//   const colors = ["#74C0FC", "#FF8787", "#69DB7C", "#FAB005"];
+
+//   return Object.entries(fieldMapping)
+//     .map(([fieldName, displayName], index) => {
+//       // 필드 데이터 유효성 확인
+//       const hasData = historyData.some(
+//         (item) => item[fieldName] !== undefined && item[fieldName] !== -1
+//       );
+
+//       // 실제 로깅
+//       console.log(`${displayName} 데이터 존재:`, hasData);
+
+//       return {
+//         type: "scatter",
+//         mode: "lines",
+//         name: displayName,
+//         x: historyData.map((item) => new Date(item.timestamp)),
+//         y: historyData.map((item) =>
+//           item[fieldName] === undefined || item[fieldName] === -1
+//             ? null
+//             : item[fieldName]
+//         ),
+//         line: { color: colors[index % colors.length], width: 2 },
+//         connectgaps: false,
+//         hovertemplate:
+//           "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
+//       };
+//     })
+//     .filter((series) => series.y.some((val) => val !== null)); // null 값만 있는 시리즈 제거
+// };
+
+const getFilteredChartData = (historyData, selectedTab) => {
   if (!historyData || historyData.length === 0) return [];
 
-  const fieldMapping = tabFieldMappings[tab];
-  if (!fieldMapping) return [];
+  const firstItem = historyData[0];
 
-  // === 추가: new Date() 변환 결과 확인 ===
-  console.log(`Convert (${tab}) - historyData 개수:`, historyData.length);
-  historyData.slice(0, 5).forEach((item, index) => {
-    // 처음 5개 항목만 로그
-    console.log(`Convert (${tab})[${index}] - 입력 문자열:`, item.timestamp);
-    const dateObject = new Date(item.timestamp);
-    console.log(`Convert (${tab})[${index}] - 변환된 Date 객체:`, dateObject);
-    // Invalid Date 확인
-    if (isNaN(dateObject.getTime())) {
-      console.error(
-        `Convert (${tab})[${index}] - Error: Invalid Date 객체 생성됨!`
+  // timestamp 제외 + 현재 탭(selectedTab)과 관련된 필드만 필터링
+  const keys = Object.keys(firstItem).filter((key) => {
+    if (key === "timestamp" || typeof firstItem[key] === "object") return false;
+    // Total은 특수 케이스로 prefix 없이도 필드명에 포함되도록 허용
+    if (selectedTab === "Total") {
+      return (
+        key.includes("Total") ||
+        key.includes("Filtered_Grid_Freq") ||
+        key.includes("T_Simul_P_REAL")
       );
     }
+    return key.includes(selectedTab); // ex) "PCS1_SOC"은 selectedTab === "PCS1"일 때만 허용
   });
-  // ====================================
 
-  const colors = ["#74C0FC", "#FF8787", "#69DB7C", "#FAB005"];
+  const colors = [
+    "#74C0FC",
+    "#FF8787",
+    "#69DB7C",
+    "#FAB005",
+    "#D0BFFF",
+    "#FFA8A8",
+    "#63E6BE",
+  ];
+  console.log("🟢 차트에 표시될 필드 목록:", keys);
 
-  return Object.entries(fieldMapping)
-    .map(([fieldName, displayName], index) => {
-      // 필드 데이터 유효성 확인
+  return keys
+    .map((fieldName, index) => {
       const hasData = historyData.some(
         (item) => item[fieldName] !== undefined && item[fieldName] !== -1
       );
 
-      // 실제 로깅
-      console.log(`${displayName} 데이터 존재:`, hasData);
-
       return {
         type: "scatter",
         mode: "lines",
-        name: displayName,
+        name: fieldName,
         x: historyData.map((item) => new Date(item.timestamp)),
         y: historyData.map((item) =>
           item[fieldName] === undefined || item[fieldName] === -1
@@ -188,10 +243,12 @@ const getFilteredChartData = (historyData, tab) => {
           "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
       };
     })
-    .filter((series) => series.y.some((val) => val !== null)); // null 값만 있는 시리즈 제거
+    .filter((series) => series.y.some((val) => val !== null));
 };
 
 export default function OpcuaHistoricalPage() {
+  const [exportLoading, setExportLoading] = useState(false); // 내보내기 로딩 상태 추가
+  const [exportError, setExportError] = useState(null); // 내보내기 오류 상태
   const [opcuaData, setOpcuaData] = useState({
     Total: { data: {}, history: [] },
     PCS1: { data: {}, history: [] },
@@ -207,9 +264,9 @@ export default function OpcuaHistoricalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchHistoricalData();
-  }, [selectedTab]);
+  // useEffect(() => {
+  //   fetchHistoricalData();
+  // }, [selectedTab]);
 
   // --- 수정된 날짜 범위 업데이트 함수 (1~3시간 범위 허용) ---
   /**
@@ -336,11 +393,76 @@ export default function OpcuaHistoricalPage() {
   //     end: finalEnd.toISOString(),
   //   });
   // };
+  // --- 추가: 데이터 내보내기 핸들러 ---
+  const handleExportData = async () => {
+    setExportLoading(true);
+    setExportError(null);
+    console.log("데이터 내보내기 시작:", {
+      start: startDate.toISOString(),
+      end: endDate.toISOString(),
+      tab: selectedTab,
+    });
+
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+      const startTimeISO = startDate.toISOString();
+      const endTimeISO = endDate.toISOString();
+
+      const response = await fetch(`${apiUrl}/api/opcua/historical/export`, {
+        // 새 백엔드 API 호출
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startTime: startTimeISO,
+          endTime: endTimeISO,
+          deviceGroup: selectedTab,
+        }),
+      });
+
+      if (!response.ok) {
+        let errorBody = "No error body";
+        try {
+          errorBody = await response.text();
+        } catch (readError) {
+          console.error("Error reading export error response body:", readError);
+        }
+        throw new Error(
+          `데이터 내보내기 실패: ${response.status}, 본문: ${errorBody}`
+        );
+      }
+
+      // 백엔드가 CSV 데이터를 직접 반환한다고 가정
+      const blob = await response.blob(); // 응답을 Blob 객체로 받음 (CSV 가정)
+
+      // 파일 이름 생성 (예시)
+      const fileName = `opcua_data_export_${selectedTab}_${startTimeISO}_to_${endTimeISO}.csv`;
+
+      // 다운로드 링크 생성 및 클릭
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(link.href); // 메모리 해제
+
+      console.log("데이터 내보내기 성공:", fileName);
+    } catch (err) {
+      setExportError(`내보내기 오류: ${err.message}`);
+      console.error("데이터 내보내기 오류:", err);
+    } finally {
+      setExportLoading(false);
+    }
+  };
+  // ====================================
+
   const updateDateRange = (changedDate, changeSource) => {
     const maxDuration = 3 * 60 * 60 * 1000; // 3시간
     const now = new Date();
     let potentialStart, potentialEnd;
-  
+
     if (changeSource === "start") {
       potentialStart = changedDate > now ? now : changedDate;
       potentialEnd = endDate;
@@ -348,7 +470,7 @@ export default function OpcuaHistoricalPage() {
       potentialEnd = changedDate > now ? now : changedDate;
       potentialStart = startDate;
     }
-  
+
     // 종료가 시작보다 빠를 수 없도록 처리
     if (potentialStart > potentialEnd) {
       if (changeSource === "start") {
@@ -357,7 +479,7 @@ export default function OpcuaHistoricalPage() {
         potentialStart = potentialEnd;
       }
     }
-  
+
     // 💡 최대 3시간 초과 제한
     let duration = potentialEnd.getTime() - potentialStart.getTime();
     if (duration > maxDuration) {
@@ -367,7 +489,7 @@ export default function OpcuaHistoricalPage() {
         potentialStart = new Date(potentialEnd.getTime() - maxDuration);
       }
     }
-  
+
     // 현재 시간 넘어가지 않도록 제한
     if (potentialEnd > now) {
       potentialEnd = now;
@@ -375,16 +497,16 @@ export default function OpcuaHistoricalPage() {
         potentialStart = new Date(potentialEnd.getTime() - maxDuration);
       }
     }
-  
+
     setStartDate(potentialStart);
     setEndDate(potentialEnd);
-  
+
     console.log("최종 설정된 시간:", {
       start: potentialStart.toISOString(),
       end: potentialEnd.toISOString(),
     });
   };
-  
+
   // handleStartDateChange and handleEndDateChange remain the same as the previous version:
   const handleStartDateChange = (date) => {
     if (date) {
@@ -452,61 +574,102 @@ export default function OpcuaHistoricalPage() {
       setLoading(false);
     }
   };
+  const sanitizeHistoryData = (data) =>
+    data.map((item) =>
+      Object.fromEntries(
+        Object.entries(item).filter(([k, v]) => typeof v !== "object")
+      )
+    );
+
+  // const processHistoricalData = (data) => {
+  //   try {
+  //     const historyData = data.data.timeSeries || [];
+  //     console.log("Process - 원본 데이터 수신:", historyData.length);
+
+  //     // === 추가: 첫 번째 데이터의 timestamp 로그 확인 ===
+  //     if (historyData.length > 0) {
+  //       console.log("Process - 첫 번째 데이터 항목 전체:", historyData[0]);
+  //       console.log(
+  //         "Process - 첫 번째 timestamp 문자열:",
+  //         historyData[0]?.timestamp
+  //       ); // timestamp 필드 확인
+  //       console.log("Process - 실제 필드 목록:", Object.keys(historyData[0]));
+  //     }
+  //     // ============================================
+
+  //     if (historyData.length > 0) {
+  //       // 첫 번째 데이터 항목의 모든 필드를 출력
+  //       console.log("첫 번째 데이터 항목 전체:", historyData[0]);
+  //       console.log("실제 필드 목록:", Object.keys(historyData[0]));
+
+  //       // 시간 범위 확인
+  //       const timestamps = historyData.map((item) => new Date(item.timestamp));
+  //       const minTime = new Date(Math.min(...timestamps));
+  //       const maxTime = new Date(Math.max(...timestamps));
+
+  //       console.log("데이터 시간 범위:", {
+  //         min: minTime.toISOString(),
+  //         max: maxTime.toISOString(),
+  //         개수: historyData.length,
+  //       });
+  //       const rawHistoryData = data.data?.timeSeries || [];
+  //       console.log("Process - 원본 데이터 수신:", rawHistoryData.length);
+  //       if (rawHistoryData.length > 0) {
+  //         console.log("🧪 첫 rawHistoryData:", rawHistoryData[0]);
+  //         const safeHistory = sanitizeHistoryData(rawHistoryData);
+  //         console.log("🧼 필터링 후 데이터:", safeHistory[0]);
+  //         // 원본 데이터 그대로 사용
+  //         setOpcuaData((prevData) => ({
+  //           ...prevData,
+  //           [selectedTab]: {
+  //             data: safeHistory[safeHistory.length - 1] || {},
+  //             history: safeHistory,
+  //           },
+  //         }));
+  //       }
+  //     } else {
+  //       console.warn("수신된 데이터가 없습니다");
+  //       // 빈 데이터 설정
+  //       setOpcuaData((prevData) => ({
+  //         ...prevData,
+  //         [selectedTab]: {
+  //           data: {},
+  //           history: [],
+  //         },
+  //       }));
+  //     }
+  //   } catch (e) {
+  //     console.error("데이터 처리 오류:", e);
+  //     setError("데이터 형식이 올바르지 않습니다");
+  //   }
+  // };
 
   const processHistoricalData = (data) => {
     try {
-      const historyData = data.data.timeSeries || [];
-      console.log("Process - 원본 데이터 수신:", historyData.length);
+      const rawHistoryData = data.data?.timeSeries || [];
+      console.log("✅ 원본 데이터 수:", rawHistoryData.length);
 
-      // === 추가: 첫 번째 데이터의 timestamp 로그 확인 ===
-      if (historyData.length > 0) {
-        console.log("Process - 첫 번째 데이터 항목 전체:", historyData[0]);
-        console.log(
-          "Process - 첫 번째 timestamp 문자열:",
-          historyData[0]?.timestamp
-        ); // timestamp 필드 확인
-        console.log("Process - 실제 필드 목록:", Object.keys(historyData[0]));
-      }
-      // ============================================
+      if (rawHistoryData.length > 0) {
+        const safeHistory = sanitizeHistoryData(rawHistoryData);
+        console.log("🧼 필터링 후 데이터:", safeHistory[0]);
 
-      if (historyData.length > 0) {
-        // 첫 번째 데이터 항목의 모든 필드를 출력
-        console.log("첫 번째 데이터 항목 전체:", historyData[0]);
-        console.log("실제 필드 목록:", Object.keys(historyData[0]));
-
-        // 시간 범위 확인
-        const timestamps = historyData.map((item) => new Date(item.timestamp));
-        const minTime = new Date(Math.min(...timestamps));
-        const maxTime = new Date(Math.max(...timestamps));
-
-        console.log("데이터 시간 범위:", {
-          min: minTime.toISOString(),
-          max: maxTime.toISOString(),
-          개수: historyData.length,
-        });
-
-        // 원본 데이터 그대로 사용
         setOpcuaData((prevData) => ({
           ...prevData,
           [selectedTab]: {
-            data: historyData[historyData.length - 1] || {},
-            history: historyData || [],
+            data: safeHistory[safeHistory.length - 1] || {},
+            history: safeHistory,
           },
         }));
       } else {
-        console.warn("수신된 데이터가 없습니다");
-        // 빈 데이터 설정
+        console.warn("⛔ 수신된 데이터가 없음");
         setOpcuaData((prevData) => ({
           ...prevData,
-          [selectedTab]: {
-            data: {},
-            history: [],
-          },
+          [selectedTab]: { data: {}, history: [] },
         }));
       }
     } catch (e) {
-      console.error("데이터 처리 오류:", e);
-      setError("데이터 형식이 올바르지 않습니다");
+      console.error("❌ 데이터 처리 중 오류:", e);
+      setError("데이터 형식 오류");
     }
   };
 
@@ -519,7 +682,7 @@ export default function OpcuaHistoricalPage() {
             selected={startDate}
             onChange={handleStartDateChange}
             showTimeSelect
-            timeIntervals={15}
+            timeIntervals={1} // 15에서 1로 변경
             dateFormat="yyyy-MM-dd HH:mm"
             className="date-picker"
             maxDate={new Date()}
@@ -529,15 +692,29 @@ export default function OpcuaHistoricalPage() {
             selected={endDate}
             onChange={handleEndDateChange}
             showTimeSelect
-            timeIntervals={15}
+            timeIntervals={1} // 15에서 1로 변경
             dateFormat="yyyy-MM-dd HH:mm"
             className="date-picker"
             maxDate={new Date()}
             minDate={startDate}
           />
-          <button onClick={fetchHistoricalData} className="search-button">
-            조회
+          <button
+            onClick={fetchHistoricalData}
+            className="search-button"
+            disabled={loading}
+          >
+            {loading ? "조회 중..." : "조회"}
           </button>
+          {/* --- 추가: 내보내기 버튼 --- */}
+          {/* <button
+             onClick={handleExportData}
+             className="export-button" // CSS 스타일링 필요
+             disabled={exportLoading || loading} // 조회 중이거나 내보내기 중일 때 비활성화
+             style={{ marginLeft: '10px' }} // 간단한 간격 추가
+          >
+            {exportLoading ? "내보내는 중..." : "데이터 내보내기 (CSV)"}
+          </button> */}
+          {/* ======================== */}
           <div className="time-limit-message">
             ※ 최대 3시간 범위만 조회 가능합니다
           </div>
@@ -598,7 +775,10 @@ export default function OpcuaHistoricalPage() {
                 </div>
               ) : (
                 <Plot
-                  data={getFilteredChartData(opcuaData.Total.history, "Total")}
+                  data={getFilteredChartData(
+                    opcuaData[selectedTab].history,
+                    selectedTab
+                  )}
                   layout={{
                     ...commonChartLayout,
                     title: `Total Trends (8MW)`,
@@ -610,7 +790,12 @@ export default function OpcuaHistoricalPage() {
                     uirevision: "total",
                   }}
                   useResizeHandler={true}
-                  style={{ width: "100%", height: "100%" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxWidth: "100%", // ✅ 최대 너비 제한
+                    overflowX: "hidden", // ✅ 스크롤 방지
+                  }}
                   config={{
                     responsive: true,
                     displayModeBar: true,
@@ -641,7 +826,10 @@ export default function OpcuaHistoricalPage() {
                 </div>
               ) : (
                 <Plot
-                  data={getFilteredChartData(opcuaData.PCS1.history, "PCS1")}
+                  data={getFilteredChartData(
+                    opcuaData[selectedTab].history,
+                    selectedTab
+                  )}
                   layout={{
                     ...commonChartLayout,
                     title: "PCS1 (2MW)",
@@ -653,7 +841,12 @@ export default function OpcuaHistoricalPage() {
                     uirevision: "pcs1",
                   }}
                   useResizeHandler={true}
-                  style={{ width: "100%", height: "100%" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxWidth: "100%", // ✅ 최대 너비 제한
+                    overflowX: "hidden", // ✅ 스크롤 방지
+                  }}
                   config={{
                     responsive: true,
                     displayModeBar: true,
@@ -684,7 +877,10 @@ export default function OpcuaHistoricalPage() {
                 </div>
               ) : (
                 <Plot
-                  data={getFilteredChartData(opcuaData.PCS2.history, "PCS2")}
+                  data={getFilteredChartData(
+                    opcuaData[selectedTab].history,
+                    selectedTab
+                  )}
                   layout={{
                     ...commonChartLayout,
                     title: "PCS2",
@@ -696,7 +892,12 @@ export default function OpcuaHistoricalPage() {
                     uirevision: "pcs2",
                   }}
                   useResizeHandler={true}
-                  style={{ width: "100%", height: "100%" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxWidth: "100%", // ✅ 최대 너비 제한
+                    overflowX: "hidden", // ✅ 스크롤 방지
+                  }}
                   config={{
                     responsive: true,
                     displayModeBar: true,
@@ -727,7 +928,10 @@ export default function OpcuaHistoricalPage() {
                 </div>
               ) : (
                 <Plot
-                  data={getFilteredChartData(opcuaData.PCS3.history, "PCS3")}
+                  data={getFilteredChartData(
+                    opcuaData[selectedTab].history,
+                    selectedTab
+                  )}
                   layout={{
                     ...commonChartLayout,
                     title: "PCS3",
@@ -739,7 +943,12 @@ export default function OpcuaHistoricalPage() {
                     uirevision: "pcs3",
                   }}
                   useResizeHandler={true}
-                  style={{ width: "100%", height: "100%" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxWidth: "100%", // ✅ 최대 너비 제한
+                    overflowX: "hidden", // ✅ 스크롤 방지
+                  }}
                   config={{
                     responsive: true,
                     displayModeBar: true,
@@ -770,7 +979,10 @@ export default function OpcuaHistoricalPage() {
                 </div>
               ) : (
                 <Plot
-                  data={getFilteredChartData(opcuaData.PCS4.history, "PCS4")}
+                  data={getFilteredChartData(
+                    opcuaData[selectedTab].history,
+                    selectedTab
+                  )}
                   layout={{
                     ...commonChartLayout,
                     title: "PCS4",
@@ -782,7 +994,12 @@ export default function OpcuaHistoricalPage() {
                     uirevision: "pcs4",
                   }}
                   useResizeHandler={true}
-                  style={{ width: "100%", height: "100%" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    maxWidth: "100%", // ✅ 최대 너비 제한
+                    overflowX: "hidden", // ✅ 스크롤 방지
+                  }}
                   config={{
                     responsive: true,
                     displayModeBar: true,

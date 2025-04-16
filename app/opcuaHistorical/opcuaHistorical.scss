@@ -36,6 +36,26 @@
   }
 }
 
+.export-button {
+  padding: 8px 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  margin-left: 10px;
+
+  &:hover {
+    background-color: #45a049;
+  }
+
+  &:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+  }
+}
+
 .loading {
   text-align: center;
   padding: 20px;

@@ -241,7 +241,26 @@ const getFilteredChartData = (historyData, selectedTab) => {
 
   const traces = keys
     .map((fieldName, index) => {
-      const xData = historyData.map((item) => new Date(item.timestamp)); // timestamp 파싱 확인
+      const xData = historyData.map((item, idx) => {
+        const tsString = item.timestamp;
+        if (idx < 5) {
+          console.log(`  [Timestamp Check ${idx}] Input String: ${tsString}`);
+        }
+        const dateObj = new Date(tsString);
+        if (idx < 5) {
+          console.log(
+            `  [Timestamp Check ${idx}] Parsed Date: ${dateObj.toISOString()}, isValid: ${!isNaN(
+              dateObj.getTime()
+            )}`
+          );
+          if (isNaN(dateObj.getTime())) {
+            console.error(
+              `  ⚠️ Invalid Date object created for timestamp: ${tsString}`
+            );
+          }
+        }
+        return dateObj;
+      });
       const yData = historyData.map((item) =>
         item[fieldName] === undefined || item[fieldName] === null // -1 대신 null 체크
           ? null
@@ -301,6 +320,25 @@ export default function OpcuaHistoricalPage() {
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [aggregationInterval, setAggregationInterval] = useState("raw"); // --- 추가: 집계 간격 상태 (기본값: raw) ---
+
+  // --- 추가: 집계 간격 옵션 ---
+  const aggregationOptions = [
+    { value: "raw", label: "원본 데이터" },
+    { value: "10ms", label: "10ms 평균" },
+    // { value: "100ms", label: "100ms 평균" }, // 필요시 추가
+    { value: "1s", label: "1초 평균" },
+    // { value: "10s", label: "10초 평균" }, // 필요시 추가
+  ];
+  // ---------------------------
+
+  // --- 추가: 집계 간격 변경 핸들러 ---
+  const handleAggregationChange = (event) => {
+    setAggregationInterval(event.target.value);
+    // 선택 변경 시 자동으로 데이터를 다시 조회하도록 할 수 있음 (선택사항)
+    // fetchHistoricalData(event.target.value); // fetchHistoricalData가 interval 인자를 받도록 수정 필요
+  };
+  // ---------------------------------
 
   // useEffect(() => {
   //   fetchHistoricalData();
@@ -456,6 +494,7 @@ export default function OpcuaHistoricalPage() {
           startTime: startTimeISO,
           endTime: endTimeISO,
           deviceGroup: selectedTab,
+          aggregationInterval: aggregationInterval, // 집계 간격 추가
         }),
       });
 
@@ -572,37 +611,36 @@ export default function OpcuaHistoricalPage() {
     }
   };
 
-  const fetchHistoricalData = async () => {
+  const fetchHistoricalData = async (interval = aggregationInterval) => {
+    // interval 인자 추가 및 기본값 설정
     try {
       setLoading(true);
       setError(null);
+      setExportError(null); // 조회 시 내보내기 오류 초기화
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-      // 시간 범위 확인 로그 추가
-      console.log("요청 시간 범위:", {
-        시작: startDate.toISOString(),
-        종료: endDate.toISOString(),
-        간격_시간: (endDate - startDate) / (1000 * 60 * 60),
-      });
       const startTimeISO = startDate.toISOString();
       const endTimeISO = endDate.toISOString();
-      console.log("실제 전송될 ISO 시간:", {
-        start: startTimeISO,
-        end: endTimeISO,
-      }); // 전송 직전 값 확인
 
-      // URL 디버깅
       console.log("요청 URL:", `${apiUrl}/api/opcua/historical`);
-      console.log("selectedTab:", selectedTab);
+      console.log("요청 파라미터:", {
+        // 로그 수정
+        startTime: startTimeISO,
+        endTime: endTimeISO,
+        deviceGroup: selectedTab,
+        aggregationInterval: interval, // --- 수정: 집계 간격 포함 ---
+      });
+
       const response = await fetch(`${apiUrl}/api/opcua/historical`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          startTime: startTimeISO, // 확인된 변수 사용
-          endTime: endTimeISO, // 확인된 변수 사용
+          startTime: startTimeISO,
+          endTime: endTimeISO,
           deviceGroup: selectedTab,
+          aggregationInterval: interval, // --- 수정: 집계 간격 포함 ---
         }),
       });
 
@@ -622,6 +660,11 @@ export default function OpcuaHistoricalPage() {
     } catch (err) {
       setError(err.message);
       console.error("데이터 요청 오류:", err);
+      // 오류 발생 시 현재 탭 데이터 초기화
+      setOpcuaData((prev) => ({
+        ...prev,
+        [selectedTab]: { data: {}, history: [] },
+      }));
     } finally {
       setLoading(false);
     }
@@ -705,26 +748,36 @@ export default function OpcuaHistoricalPage() {
             maxDate={new Date()}
             minDate={startDate}
           />
+          {/* --- 추가: 집계 간격 선택 드롭다운 --- */}
+          <select
+            value={aggregationInterval}
+            onChange={handleAggregationChange}
+            className="aggregation-select" // 스타일링 위한 클래스 추가
+            disabled={loading || exportLoading}
+            style={{ marginLeft: "10px", padding: "5px", borderRadius: "4px" }}
+          >
+            {aggregationOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          {/* --------------------------------- */}
           <button
-            onClick={fetchHistoricalData}
+            onClick={() => fetchHistoricalData()} // 현재 상태의 interval 사용
             className="search-button"
-            disabled={loading || exportLoading} // 내보내기 중일 때도 비활성화
+            disabled={loading || exportLoading}
           >
             {loading ? "조회 중..." : "조회"}
           </button>
-          {/* --- 내보내기 버튼 활성화 --- */}
           <button
-            onClick={handleExportData}
-            className="export-button" // CSS 스타일링 필요 시 추가/수정
-            disabled={exportLoading || loading} // 조회 중이거나 내보내기 중일 때 비활성화
-            style={{ marginLeft: "10px" }} // 간단한 간격 추가
+            onClick={handleExportData} // handleExportData는 현재 상태의 interval 사용
+            className="export-button"
+            disabled={exportLoading || loading}
+            style={{ marginLeft: "10px" }}
           >
             {exportLoading ? "내보내는 중..." : "데이터 내보내기 (CSV)"}
           </button>
-          {/* ======================== */}
-          {/* <div className="time-limit-message">
-            ※ 최대 3시간 범위만 조회 가능합니다
-          </div> */}
         </div>
       </div>
 
@@ -775,7 +828,7 @@ export default function OpcuaHistoricalPage() {
 
         <div className="chart-container">
           {selectedTab === "Total" && (
-            <div className="chart-wrapper">
+            <div className="chart-wrapper" style={{ height: "500px" }}>
               {loading ? (
                 <div className="loading-spinner-container">
                   <div className="loading-spinner"></div>
@@ -805,10 +858,8 @@ export default function OpcuaHistoricalPage() {
                     title: `Total Trends (8MW)`,
                     xaxis: {
                       ...commonChartLayout.xaxis,
-                      range: [startDate, endDate],
-                      autorange: false,
+                      autorange: true,
                     },
-                    uirevision: "total",
                   }}
                   useResizeHandler={true}
                   style={{
@@ -830,7 +881,7 @@ export default function OpcuaHistoricalPage() {
           )}
 
           {selectedTab === "PCS1" && (
-            <div className="chart-wrapper">
+            <div className="chart-wrapper" style={{ height: "500px" }}>
               {loading ? (
                 <div className="loading-spinner-container">
                   <div className="loading-spinner"></div>
@@ -860,10 +911,8 @@ export default function OpcuaHistoricalPage() {
                     title: "PCS1 (2MW)",
                     xaxis: {
                       ...commonChartLayout.xaxis,
-                      range: [startDate, endDate],
-                      autorange: false,
+                      autorange: true,
                     },
-                    uirevision: "pcs1",
                   }}
                   useResizeHandler={true}
                   style={{
@@ -885,7 +934,7 @@ export default function OpcuaHistoricalPage() {
           )}
 
           {selectedTab === "PCS2" && (
-            <div className="chart-wrapper">
+            <div className="chart-wrapper" style={{ height: "500px" }}>
               {loading ? (
                 <div className="loading-spinner-container">
                   <div className="loading-spinner"></div>
@@ -915,10 +964,8 @@ export default function OpcuaHistoricalPage() {
                     title: "PCS2",
                     xaxis: {
                       ...commonChartLayout.xaxis,
-                      range: [startDate, endDate],
-                      autorange: false,
+                      autorange: true,
                     },
-                    uirevision: "pcs2",
                   }}
                   useResizeHandler={true}
                   style={{
@@ -940,7 +987,7 @@ export default function OpcuaHistoricalPage() {
           )}
 
           {selectedTab === "PCS3" && (
-            <div className="chart-wrapper">
+            <div className="chart-wrapper" style={{ height: "500px" }}>
               {loading ? (
                 <div className="loading-spinner-container">
                   <div className="loading-spinner"></div>
@@ -970,10 +1017,8 @@ export default function OpcuaHistoricalPage() {
                     title: "PCS3",
                     xaxis: {
                       ...commonChartLayout.xaxis,
-                      range: [startDate, endDate],
-                      autorange: false,
+                      autorange: true,
                     },
-                    uirevision: "pcs3",
                   }}
                   useResizeHandler={true}
                   style={{
@@ -995,7 +1040,7 @@ export default function OpcuaHistoricalPage() {
           )}
 
           {selectedTab === "PCS4" && (
-            <div className="chart-wrapper">
+            <div className="chart-wrapper" style={{ height: "500px" }}>
               {loading ? (
                 <div className="loading-spinner-container">
                   <div className="loading-spinner"></div>
@@ -1025,10 +1070,8 @@ export default function OpcuaHistoricalPage() {
                     title: "PCS4",
                     xaxis: {
                       ...commonChartLayout.xaxis,
-                      range: [startDate, endDate],
-                      autorange: false,
+                      autorange: true,
                     },
-                    uirevision: "pcs4",
                   }}
                   useResizeHandler={true}
                   style={{

@@ -195,20 +195,39 @@ const getFilteredChartData = (historyData, selectedTab) => {
   if (!historyData || historyData.length === 0) return [];
 
   const firstItem = historyData[0];
+  console.log("📊 getFilteredChartData - 첫 항목:", firstItem); // 첫 데이터 확인
 
   // timestamp 제외 + 현재 탭(selectedTab)과 관련된 필드만 필터링
   const keys = Object.keys(firstItem).filter((key) => {
     if (key === "timestamp" || typeof firstItem[key] === "object") return false;
-    // Total은 특수 케이스로 prefix 없이도 필드명에 포함되도록 허용
+
+    let include = false;
     if (selectedTab === "Total") {
-      return (
+      include =
         key.includes("Total") ||
         key.includes("Filtered_Grid_Freq") ||
-        key.includes("T_Simul_P_REAL")
-      );
+        key.includes("T_Simul_P_REAL");
+    } else {
+      // --- 수정: PCS 탭 필터링 강화 (대소문자 구분 없이, 정확히 해당 PCS로 시작하는지) ---
+      // 예: PCS1 탭이면 "PCS1_"로 시작하는 필드만 포함 (PCS10 등 제외)
+      include = key.toUpperCase().startsWith(selectedTab.toUpperCase() + "_");
+      // -------------------------------------------------------------------
     }
-    return key.includes(selectedTab); // ex) "PCS1_SOC"은 selectedTab === "PCS1"일 때만 허용
+    // --- 추가: 키 필터링 결과 로그 ---
+    // console.log(`  - 필터링 키: '${key}', 포함 여부: ${include}`);
+    // -------------------------------
+    return include;
   });
+
+  // --- 수정: 필터링된 키 목록 로그 강화 ---
+  console.log(`📊 ${selectedTab} 탭에 대해 필터링된 키 목록:`, keys);
+  if (keys.length === 0) {
+    console.warn(
+      `�� ${selectedTab} 탭에 해당하는 필드를 찾지 못했습니다. 필터링 로직 또는 데이터 필드명을 확인하세요.`
+    );
+    return []; // 데이터 없으면 빈 배열 반환
+  }
+  // -------------------------------------
 
   const colors = [
     "#74C0FC",
@@ -219,35 +238,54 @@ const getFilteredChartData = (historyData, selectedTab) => {
     "#FFA8A8",
     "#63E6BE",
   ];
-  console.log("🟢 차트에 표시될 필드 목록:", keys);
 
-  return keys
+  const traces = keys
     .map((fieldName, index) => {
-      const hasData = historyData.some(
-        (item) => item[fieldName] !== undefined && item[fieldName] !== -1
+      const xData = historyData.map((item) => new Date(item.timestamp)); // timestamp 파싱 확인
+      const yData = historyData.map((item) =>
+        item[fieldName] === undefined || item[fieldName] === null // -1 대신 null 체크
+          ? null
+          : item[fieldName]
       );
+
+      // --- 추가: 각 시리즈의 데이터 샘플 로깅 ---
+      const nonNullYCount = yData.filter((y) => y !== null).length;
+      console.log(
+        `  📈 시리즈 '${fieldName}': X 데이터 ${xData.length}개, Y 데이터 ${yData.length}개 (유효값 ${nonNullYCount}개)`
+      );
+      // console.log(`    Y 샘플 (처음 5개):`, yData.slice(0, 5)); // 필요시 샘플 확인
+      if (xData.length === 0 || nonNullYCount === 0) {
+        console.warn(
+          `    ⚠️ 시리즈 '${fieldName}'는 유효한 데이터가 없어 제외될 수 있습니다.`
+        );
+      }
+      // ---------------------------------------
 
       return {
         type: "scatter",
         mode: "lines",
         name: fieldName,
-        x: historyData.map((item) => new Date(item.timestamp)),
-        y: historyData.map((item) =>
-          item[fieldName] === undefined || item[fieldName] === -1
-            ? null
-            : item[fieldName]
-        ),
+        x: xData,
+        y: yData,
         line: { color: colors[index % colors.length], width: 2 },
-        connectgaps: false,
+        connectgaps: false, // false 유지 (null 값은 끊어서 표시)
         hovertemplate:
           "<b>데이터</b>: %{data.name}<br><b>시간</b>: %{x|%Y-%m-%d %H:%M:%S.%L}<br><b>값</b>: %{y:.3f}<extra></extra>",
       };
     })
-    .filter((series) => series.y.some((val) => val !== null));
+    .filter((series) => series.y.some((val) => val !== null)); // 유효한 Y값이 하나라도 있는 시리즈만 최종 포함
+
+  // --- 추가: 최종 생성된 트레이스 로깅 ---
+  console.log(
+    `📊 ${selectedTab} 탭에 대해 최종 생성된 Plotly 트레이스 수: ${traces.length}`
+  );
+  // ------------------------------------
+
+  return traces;
 };
 
 export default function OpcuaHistoricalPage() {
-  const [exportLoading, setExportLoading] = useState(false); // 내보내기 로딩 상태 추가
+  const [exportLoading, setExportLoading] = useState(false); // 내보내기 로딩 상태
   const [exportError, setExportError] = useState(null); // 내보내기 오류 상태
   const [opcuaData, setOpcuaData] = useState({
     Total: { data: {}, history: [] },
@@ -395,8 +433,8 @@ export default function OpcuaHistoricalPage() {
   // };
   // --- 추가: 데이터 내보내기 핸들러 ---
   const handleExportData = async () => {
-    setExportLoading(true);
-    setExportError(null);
+    setExportLoading(true); // 로딩 시작
+    setExportError(null); // 이전 오류 초기화
     console.log("데이터 내보내기 시작:", {
       start: startDate.toISOString(),
       end: endDate.toISOString(),
@@ -408,8 +446,8 @@ export default function OpcuaHistoricalPage() {
       const startTimeISO = startDate.toISOString();
       const endTimeISO = endDate.toISOString();
 
+      // 백엔드 /export 엔드포인트 호출
       const response = await fetch(`${apiUrl}/api/opcua/historical/export`, {
-        // 새 백엔드 API 호출
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -421,38 +459,52 @@ export default function OpcuaHistoricalPage() {
         }),
       });
 
+      // 응답 상태 확인
       if (!response.ok) {
-        let errorBody = "No error body";
+        let errorBody = "오류 내용을 읽을 수 없습니다.";
         try {
+          // 오류 응답 본문을 텍스트로 읽기 시도
           errorBody = await response.text();
         } catch (readError) {
-          console.error("Error reading export error response body:", readError);
+          console.error("내보내기 오류 응답 본문 읽기 실패:", readError);
         }
+        // 오류 객체 생성 및 throw
         throw new Error(
-          `데이터 내보내기 실패: ${response.status}, 본문: ${errorBody}`
+          `데이터 내보내기 실패: ${response.status} ${response.statusText}. 본문: ${errorBody}`
         );
       }
 
-      // 백엔드가 CSV 데이터를 직접 반환한다고 가정
-      const blob = await response.blob(); // 응답을 Blob 객체로 받음 (CSV 가정)
+      // 응답 본문을 Blob 객체로 받음 (CSV 데이터)
+      const blob = await response.blob();
 
-      // 파일 이름 생성 (예시)
-      const fileName = `opcua_data_export_${selectedTab}_${startTimeISO}_to_${endTimeISO}.csv`;
+      // 파일 이름 생성 (컨트롤러에서 생성한 방식과 유사하게)
+      const safeStartTime = startTimeISO
+        .replaceAll("[:\\-]", "")
+        .replace("T", "_")
+        .replace("Z", "");
+      const safeEndTime = endTimeISO
+        .replaceAll("[:\\-]", "")
+        .replace("T", "_")
+        .replace("Z", "");
+      const fileName = `opcua_export_${selectedTab}_${safeStartTime}_${safeEndTime}.csv`;
 
       // 다운로드 링크 생성 및 클릭
       const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(link.href); // 메모리 해제
+      link.href = window.URL.createObjectURL(blob); // Blob 데이터 URL 생성
+      link.download = fileName; // 다운로드 파일 이름 설정
+      document.body.appendChild(link); // 링크를 DOM에 추가
+      link.click(); // 링크 클릭 이벤트 발생
+      document.body.removeChild(link); // 링크 제거
+      window.URL.revokeObjectURL(link.href); // 생성된 URL 해제 (메모리 누수 방지)
 
       console.log("데이터 내보내기 성공:", fileName);
     } catch (err) {
-      setExportError(`내보내기 오류: ${err.message}`);
-      console.error("데이터 내보내기 오류:", err);
+      // 오류 상태 업데이트 및 콘솔 로그
+      const errorMessage = `내보내기 오류: ${err.message}`;
+      setExportError(errorMessage);
+      console.error("데이터 내보내기 중 오류 발생:", err);
     } finally {
+      // 로딩 상태 종료
       setExportLoading(false);
     }
   };
@@ -581,85 +633,40 @@ export default function OpcuaHistoricalPage() {
       )
     );
 
-  // const processHistoricalData = (data) => {
-  //   try {
-  //     const historyData = data.data.timeSeries || [];
-  //     console.log("Process - 원본 데이터 수신:", historyData.length);
-
-  //     // === 추가: 첫 번째 데이터의 timestamp 로그 확인 ===
-  //     if (historyData.length > 0) {
-  //       console.log("Process - 첫 번째 데이터 항목 전체:", historyData[0]);
-  //       console.log(
-  //         "Process - 첫 번째 timestamp 문자열:",
-  //         historyData[0]?.timestamp
-  //       ); // timestamp 필드 확인
-  //       console.log("Process - 실제 필드 목록:", Object.keys(historyData[0]));
-  //     }
-  //     // ============================================
-
-  //     if (historyData.length > 0) {
-  //       // 첫 번째 데이터 항목의 모든 필드를 출력
-  //       console.log("첫 번째 데이터 항목 전체:", historyData[0]);
-  //       console.log("실제 필드 목록:", Object.keys(historyData[0]));
-
-  //       // 시간 범위 확인
-  //       const timestamps = historyData.map((item) => new Date(item.timestamp));
-  //       const minTime = new Date(Math.min(...timestamps));
-  //       const maxTime = new Date(Math.max(...timestamps));
-
-  //       console.log("데이터 시간 범위:", {
-  //         min: minTime.toISOString(),
-  //         max: maxTime.toISOString(),
-  //         개수: historyData.length,
-  //       });
-  //       const rawHistoryData = data.data?.timeSeries || [];
-  //       console.log("Process - 원본 데이터 수신:", rawHistoryData.length);
-  //       if (rawHistoryData.length > 0) {
-  //         console.log("🧪 첫 rawHistoryData:", rawHistoryData[0]);
-  //         const safeHistory = sanitizeHistoryData(rawHistoryData);
-  //         console.log("🧼 필터링 후 데이터:", safeHistory[0]);
-  //         // 원본 데이터 그대로 사용
-  //         setOpcuaData((prevData) => ({
-  //           ...prevData,
-  //           [selectedTab]: {
-  //             data: safeHistory[safeHistory.length - 1] || {},
-  //             history: safeHistory,
-  //           },
-  //         }));
-  //       }
-  //     } else {
-  //       console.warn("수신된 데이터가 없습니다");
-  //       // 빈 데이터 설정
-  //       setOpcuaData((prevData) => ({
-  //         ...prevData,
-  //         [selectedTab]: {
-  //           data: {},
-  //           history: [],
-  //         },
-  //       }));
-  //     }
-  //   } catch (e) {
-  //     console.error("데이터 처리 오류:", e);
-  //     setError("데이터 형식이 올바르지 않습니다");
-  //   }
-  // };
-
   const processHistoricalData = (data) => {
     try {
       const rawHistoryData = data.data?.timeSeries || [];
-      console.log("✅ 원본 데이터 수:", rawHistoryData.length);
+      console.log("✅ 원본 데이터 수:", rawHistoryData.length); // 기존 로그
 
       if (rawHistoryData.length > 0) {
-        const safeHistory = sanitizeHistoryData(rawHistoryData);
-        console.log("🧼 필터링 후 데이터:", safeHistory[0]);
+        // --- 추가: 첫 데이터 항목 상세 로깅 ---
+        console.log("🧪 첫 번째 원본 데이터 항목:", rawHistoryData[0]);
+        // ----------------------------------
 
-        setOpcuaData((prevData) => ({
-          ...prevData,
-          [selectedTab]: {
-            data: safeHistory[safeHistory.length - 1] || {},
-            history: safeHistory,
-          },
-        }));
+        const safeHistory = sanitizeHistoryData(rawHistoryData);
+        console.log("🧼 필터링 후 데이터:", safeHistory[0]); // 기존 로그
+
+        // --- 추가: 상태 업데이트 전 데이터 확인 ---
+        console.log(
+          `💾 ${selectedTab} 탭 상태 업데이트 예정. History 길이: ${safeHistory.length}`
+        );
+        // ---------------------------------------
+
+        setOpcuaData((prevData) => {
+          const newState = {
+            ...prevData,
+            [selectedTab]: {
+              // data 필드는 마지막 데이터 포인트 또는 빈 객체로 유지
+              data: safeHistory[safeHistory.length - 1] || {},
+              // history 필드에 전체 배열 할당
+              history: safeHistory,
+            },
+          };
+          // --- 추가: 업데이트될 상태 객체 확인 ---
+          console.log("🔄 업데이트될 전체 상태 객체:", newState);
+          // -------------------------------------
+          return newState;
+        });
       } else {
         console.warn("⛔ 수신된 데이터가 없음");
         setOpcuaData((prevData) => ({
@@ -701,28 +708,38 @@ export default function OpcuaHistoricalPage() {
           <button
             onClick={fetchHistoricalData}
             className="search-button"
-            disabled={loading}
+            disabled={loading || exportLoading} // 내보내기 중일 때도 비활성화
           >
             {loading ? "조회 중..." : "조회"}
           </button>
-          {/* --- 추가: 내보내기 버튼 --- */}
-          {/* <button
-             onClick={handleExportData}
-             className="export-button" // CSS 스타일링 필요
-             disabled={exportLoading || loading} // 조회 중이거나 내보내기 중일 때 비활성화
-             style={{ marginLeft: '10px' }} // 간단한 간격 추가
+          {/* --- 내보내기 버튼 활성화 --- */}
+          <button
+            onClick={handleExportData}
+            className="export-button" // CSS 스타일링 필요 시 추가/수정
+            disabled={exportLoading || loading} // 조회 중이거나 내보내기 중일 때 비활성화
+            style={{ marginLeft: "10px" }} // 간단한 간격 추가
           >
             {exportLoading ? "내보내는 중..." : "데이터 내보내기 (CSV)"}
-          </button> */}
+          </button>
           {/* ======================== */}
-          <div className="time-limit-message">
+          {/* <div className="time-limit-message">
             ※ 최대 3시간 범위만 조회 가능합니다
-          </div>
+          </div> */}
         </div>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
-      {/* 전역 로딩 표시는 제거 또는 유지 */}
+      {/* 데이터 조회 오류 메시지 */}
+      {error && <div className="error-message">조회 오류: {error}</div>}
+      {/* --- 추가: 내보내기 오류 메시지 표시 --- */}
+      {exportError && (
+        <div
+          className="error-message"
+          style={{ color: "orange", marginTop: "5px" }}
+        >
+          내보내기 오류: {exportError}
+        </div>
+      )}
+      {/* ================================= */}
 
       {/* 차트 영역 */}
       <div className="chart-section">

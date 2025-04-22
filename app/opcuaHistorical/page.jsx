@@ -494,7 +494,7 @@ export default function OpcuaHistoricalPage() {
           startTime: startTimeISO,
           endTime: endTimeISO,
           deviceGroup: selectedTab,
-          aggregationInterval: aggregationInterval, // 집계 간격 추가
+          aggregationInterval: interval, // 집계 간격 추가
         }),
       });
 

@@ -1097,7 +1097,6 @@
 //   );
 // }
 
-
 "use client";
 
 import dynamic from "next/dynamic";
@@ -1493,70 +1492,86 @@ export default function OpcuaHistoricalPage() {
   //     end: finalEnd.toISOString(),
   //   });
   // };
-  // --- 추가: 데이터 내보내기 핸들러 ---
+
+
   const handleExportData = async () => {
-    setExportLoading(true);
-    setExportError(null);
-    console.log("데이터 내보내기 시작:", {
-      start: startDate.toISOString(),
-      end: endDate.toISOString(),
-      tab: selectedTab,
-    });
-
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-      const startTimeISO = startDate.toISOString();
-      const endTimeISO = endDate.toISOString();
-
-      const response = await fetch(`${apiUrl}/api/opcua/historical/export`, {
-        // 새 백엔드 API 호출
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startTime: startTimeISO,
-          endTime: endTimeISO,
-          deviceGroup: selectedTab,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorBody = "No error body";
-        try {
-          errorBody = await response.text();
-        } catch (readError) {
-          console.error("Error reading export error response body:", readError);
-        }
-        throw new Error(
-          `데이터 내보내기 실패: ${response.status}, 본문: ${errorBody}`
-        );
-      }
-
-      // 백엔드가 CSV 데이터를 직접 반환한다고 가정
-      const blob = await response.blob(); // 응답을 Blob 객체로 받음 (CSV 가정)
-
-      // 파일 이름 생성 (예시)
-      const fileName = `opcua_data_export_${selectedTab}_${startTimeISO}_to_${endTimeISO}.csv`;
-
-      // 다운로드 링크 생성 및 클릭
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(link.href); // 메모리 해제
-
-      console.log("데이터 내보내기 성공:", fileName);
-    } catch (err) {
-      setExportError(`내보내기 오류: ${err.message}`);
-      console.error("데이터 내보내기 오류:", err);
-    } finally {
-      setExportLoading(false);
-    }
+    const start = encodeURIComponent(startTime);
+    const end = encodeURIComponent(endTime);
+    const group = encodeURIComponent(deviceGroup);
+  
+    const url = `/api/opcua/historical/export?start=${start}&end=${end}&deviceGroup=${group}`;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "historical_data.csv";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
-  // ====================================
+
+  // // --- 추가: 데이터 내보내기 핸들러 ---
+  // const handleExportData = async () => {
+  //   setExportLoading(true);
+  //   setExportError(null);
+  //   console.log("데이터 내보내기 시작:", {
+  //     start: startDate.toISOString(),
+  //     end: endDate.toISOString(),
+  //     tab: selectedTab,
+  //   });
+
+  //   try {
+  //     const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+  //     const startTimeISO = startDate.toISOString();
+  //     const endTimeISO = endDate.toISOString();
+
+  //     const response = await fetch(`${apiUrl}/api/opcua/historical/export`, {
+  //       // 새 백엔드 API 호출
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         startTime: startTimeISO,
+  //         endTime: endTimeISO,
+  //         deviceGroup: selectedTab,
+  //       }),
+  //     });
+
+  //     if (!response.ok) {
+  //       let errorBody = "No error body";
+  //       try {
+  //         errorBody = await response.text();
+  //       } catch (readError) {
+  //         console.error("Error reading export error response body:", readError);
+  //       }
+  //       throw new Error(
+  //         `데이터 내보내기 실패: ${response.status}, 본문: ${errorBody}`
+  //       );
+  //     }
+
+  //     // 백엔드가 CSV 데이터를 직접 반환한다고 가정
+  //     const blob = await response.blob(); // 응답을 Blob 객체로 받음 (CSV 가정)
+
+  //     // 파일 이름 생성 (예시)
+  //     const fileName = `opcua_data_export_${selectedTab}_${startTimeISO}_to_${endTimeISO}.csv`;
+
+  //     // 다운로드 링크 생성 및 클릭
+  //     const link = document.createElement("a");
+  //     link.href = window.URL.createObjectURL(blob);
+  //     link.download = fileName;
+  //     document.body.appendChild(link);
+  //     link.click();
+  //     document.body.removeChild(link);
+  //     window.URL.revokeObjectURL(link.href); // 메모리 해제
+
+  //     console.log("데이터 내보내기 성공:", fileName);
+  //   } catch (err) {
+  //     setExportError(`내보내기 오류: ${err.message}`);
+  //     console.error("데이터 내보내기 오류:", err);
+  //   } finally {
+  //     setExportLoading(false);
+  //   }
+  // };
+  // // ====================================
 
   const updateDateRange = (changedDate, changeSource) => {
     const maxDuration = 3 * 60 * 60 * 1000; // 3시간
@@ -1664,7 +1679,7 @@ export default function OpcuaHistoricalPage() {
       const data = await response.json();
       console.log("processHistoricalData 진입 시 data:", data);
 
-      console.log("응답 데이터 항목 수:", data.data?.timeSeries?.length || 0);
+      console.log("응답 데이터 항목 수:", data.timeSeriesData?.length || 0);
 
       processHistoricalData(data);
     } catch (err) {
@@ -1746,7 +1761,7 @@ export default function OpcuaHistoricalPage() {
 
   const processHistoricalData = (data) => {
     try {
-      const rawHistoryData = data.data?.timeSeries || [];
+      const rawHistoryData = data.timeSeriesData || [];
       console.log("✅ 원본 데이터 수:", rawHistoryData.length);
 
       if (rawHistoryData.length > 0) {
@@ -1804,6 +1819,15 @@ export default function OpcuaHistoricalPage() {
             disabled={loading}
           >
             {loading ? "조회 중..." : "조회"}
+          </button>
+
+          <button
+            onClick={handleExportData} // handleExportData는 현재 상태의 interval 사용
+            className="export-button"
+            disabled={exportLoading || loading}
+            style={{ marginLeft: "10px" }}
+          >
+            {exportLoading ? "내보내는 중..." : "데이터 내보내기 (CSV)"}
           </button>
           {/* --- 추가: 내보내기 버튼 --- */}
           {/* <button

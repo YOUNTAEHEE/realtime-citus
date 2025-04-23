@@ -1105,7 +1105,6 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../opcua/realtimeOpcua.scss";
 import "./opcuaHistorical.scss";
-
 const Plot = dynamic(
   () =>
     import("react-plotly.js").then((mod) => {
@@ -1363,6 +1362,12 @@ export default function OpcuaHistoricalPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const CSVLink = dynamic(
+    () => import("react-csv").then((mod) => mod.CSVLink),
+    {
+      ssr: false,
+    }
+  );
   // useEffect(() => {
   //   fetchHistoricalData();
   // }, [selectedTab]);
@@ -1493,19 +1498,18 @@ export default function OpcuaHistoricalPage() {
   //   });
   // };
 
+  // 2. handleExportData 함수를 수정하여 API 호출 대신 CSVLink 사용
+  const handleExportData = () => {
+    // 이미 가지고 있는 데이터 활용
+    const data = opcuaData[selectedTab].history;
 
-  const handleExportData = async () => {
-    const start = encodeURIComponent(startTime);
-    const end = encodeURIComponent(endTime);
-    const group = encodeURIComponent(deviceGroup);
-  
-    const url = `/api/opcua/historical/export?start=${start}&end=${end}&deviceGroup=${group}`;
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "historical_data.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (!data || data.length === 0) {
+      alert("내보낼 데이터가 없습니다.");
+      return;
+    }
+
+    // CSV 다운로드 트리거를 위해 csvLink 요소 클릭
+    document.getElementById("csvDownloadLink").click();
   };
 
   // // --- 추가: 데이터 내보내기 핸들러 ---
@@ -1768,13 +1772,33 @@ export default function OpcuaHistoricalPage() {
         const safeHistory = sanitizeHistoryData(rawHistoryData);
         console.log("🧼 필터링 후 데이터:", safeHistory[0]);
 
-        setOpcuaData((prevData) => ({
-          ...prevData,
-          [selectedTab]: {
-            data: safeHistory[safeHistory.length - 1] || {},
-            history: safeHistory,
-          },
-        }));
+        // setOpcuaData((prevData) => ({
+        //   ...prevData,
+        //   [selectedTab]: {
+        //     data: safeHistory[safeHistory.length - 1] || {},
+        //     history: safeHistory,
+        //   },
+        // }));
+         // --- 수정된 부분: 모든 탭의 history에 전체 safeHistory 할당 ---
+      setOpcuaData((prevData) => {
+        const newState = { ...prevData };
+        const lastDataPoint = safeHistory[safeHistory.length - 1] || {};
+
+        // 모든 탭 이름 배열
+        const allTabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+
+        // 반복문을 사용하여 모든 탭의 history 업데이트
+        allTabs.forEach(tab => {
+          newState[tab] = {
+            data: lastDataPoint, // 마지막 데이터는 공통으로 사용 (선택 사항)
+            history: safeHistory, // !!! 핵심: 모든 탭에 동일한 전체 히스토리 할당 !!!
+          };
+        });
+
+        console.log("🔄 상태 업데이트 완료. 모든 탭에 history 할당됨.", newState);
+        return newState;
+      });
+      // --- 수정 끝 ---
       } else {
         console.warn("⛔ 수신된 데이터가 없음");
         setOpcuaData((prevData) => ({
@@ -1820,6 +1844,18 @@ export default function OpcuaHistoricalPage() {
           >
             {loading ? "조회 중..." : "조회"}
           </button>
+
+          {/* 눈에 보이지 않게 CSVLink 추가 */}
+          <div style={{ display: "none" }}>
+            <CSVLink
+              id="csvDownloadLink"
+              data={opcuaData[selectedTab].history}
+              filename={`historical_data_${selectedTab}_${
+                startDate.toISOString().split("T")[0]
+              }.csv`}
+              separator=","
+            />
+          </div>
 
           <button
             onClick={handleExportData} // handleExportData는 현재 상태의 interval 사용

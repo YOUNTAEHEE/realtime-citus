@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../opcua/realtimeOpcua.scss";
@@ -170,113 +170,105 @@ const getFilteredChartData = (historyData, selectedTab) => {
 
 // DataTable 컴포넌트 정의
 const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
-  // --- 로깅: 컴포넌트 시작 시 받는 props 확인 ---
+  // --- 로깅: 컴포넌트 시작 시 받는 props 확인 (디버깅 완료 후 제거 가능) ---
   console.log("--- DataTable received props ---");
-  console.log(
-    "DataTable received historyData:",
-    JSON.stringify(historyData)?.substring(0, 200) + "..."
-  ); // 데이터가 크므로 일부만 로깅
-  console.log("DataTable received isLoading:", isLoading);
-  console.log("DataTable received error:", error);
-  console.log("DataTable received selectedTab:", selectedTab);
+  // console.log('DataTable received historyData:', JSON.stringify(historyData)?.substring(0, 200) + '...');
+  // console.log('DataTable received isLoading:', isLoading);
+  // console.log('DataTable received error:', error);
+  // console.log('DataTable received selectedTab:', selectedTab);
   // --- 로깅 끝 ---
 
-  // --- useMemo 제거하고 직접 계산 ---
+  // --- useMemo 복원 ---
 
   // 1. rowsArray 계산 (historyData.rows를 실제 배열로 변환)
-  console.log("DataTable: Calculating rowsArray (without useMemo)");
-  let rowsArray = []; // 기본값: 빈 배열
-  if (historyData && historyData.rows) {
-    // historyData와 rows 속성이 있는지 확인
+  const rowsArray = useMemo(() => {
+    console.log("DataTable: Calculating rowsArray (with useMemo)"); // 이제 useMemo 사용
+    if (!historyData || !historyData.rows) {
+      console.log(
+        "DataTable: historyData or historyData.rows is missing. Returning empty array."
+      );
+      return [];
+    }
     if (Array.isArray(historyData.rows)) {
-      // 이미 배열이면 그대로 사용
-      rowsArray = historyData.rows;
+      return historyData.rows;
     } else {
-      // 배열이 아니면 Array.from으로 변환 시도
       console.warn(
         "DataTable: historyData.rows is not a standard array. Converting using Array.from()."
       );
       try {
-        rowsArray = Array.from(historyData.rows); // 배열 변환
+        const convertedArray = Array.from(historyData.rows);
         console.log(
-          `DataTable: Conversion successful. New array length: ${rowsArray.length}`
+          `DataTable: Conversion successful. New array length: ${convertedArray.length}`
         );
+        return convertedArray;
       } catch (e) {
         console.error(
           "DataTable: Failed to convert historyData.rows to array:",
           e
         );
-        rowsArray = []; // 변환 실패 시 빈 배열
+        return [];
       }
     }
-  } else {
-    // historyData나 rows가 없을 때 로그
-    console.log(
-      "DataTable: historyData or historyData.rows is missing for rowsArray calculation."
-    );
-  }
+  }, [historyData]); // historyData가 변경될 때만 재계산
 
   // 2. columns 계산 (변환된 rowsArray와 selectedTab 기반)
-  console.log("DataTable: Calculating columns (without useMemo)");
-  let columns = []; // 기본값: 빈 배열
-  if (rowsArray && rowsArray.length > 0) {
-    // 변환된 배열이 유효할 때만 실행
-    const firstItem = rowsArray[0]; // 첫 번째 아이템으로 컬럼 키 확인
-    if (firstItem && typeof firstItem === "object") {
-      // 첫 아이템이 객체인지 확인
+  const columns = useMemo(() => {
+    console.log("DataTable: Calculating columns (with useMemo)"); // 이제 useMemo 사용
+    if (!rowsArray || rowsArray.length === 0) {
       console.log(
-        "DataTable: Calculating columns based on selectedTab:",
-        selectedTab,
-        "and firstItem keys:",
-        Object.keys(firstItem)
+        "DataTable: rowsArray is invalid or empty for columns calculation."
       );
-      const allKeys = Object.keys(firstItem);
-      // 키 필터링 로직 (timestamp, object 제외 및 selectedTab 기반 필터링)
-      const filteredKeys = allKeys.filter((key) => {
-        if (key === "timestamp" || typeof firstItem[key] === "object")
-          return false;
-        if (selectedTab === "Total") {
-          const isPcsKey = /^PCS\d/.test(key);
-          const shouldInclude =
-            key.includes("Total") ||
-            key.includes("Filtered_Grid_Freq") ||
-            key.includes("_Grid_Freq");
-          return !isPcsKey && shouldInclude;
-        } else {
-          return key.startsWith(selectedTab);
-        }
-      });
-      console.log("DataTable: Filtered keys for columns:", filteredKeys);
-      // 필터링된 키로 컬럼 객체 배열 생성
-      columns = filteredKeys.map((key) => ({ id: key, label: key }));
-    } else {
-      // 첫 아이템이 유효하지 않을 때 로그
+      return [];
+    }
+    const firstItem = rowsArray[0];
+    if (!firstItem || typeof firstItem !== "object") {
       console.log(
         "DataTable: First row is invalid for columns calculation.",
         firstItem
       );
+      return [];
     }
-  } else {
-    // rowsArray가 비어있을 때 로그
     console.log(
-      "DataTable: rowsArray is invalid or empty for columns calculation."
+      "DataTable: Calculating columns based on selectedTab:",
+      selectedTab,
+      "and firstItem keys:",
+      Object.keys(firstItem)
     );
-  }
+    const allKeys = Object.keys(firstItem);
+    const filteredKeys = allKeys.filter((key) => {
+      if (key === "timestamp" || typeof firstItem[key] === "object")
+        return false;
+      if (selectedTab === "Total") {
+        const isPcsKey = /^PCS\d/.test(key);
+        const shouldInclude =
+          key.includes("Total") ||
+          key.includes("Filtered_Grid_Freq") ||
+          key.includes("_Grid_Freq");
+        return !isPcsKey && shouldInclude;
+      } else {
+        return key.startsWith(selectedTab);
+      }
+    });
+    console.log("DataTable: Filtered keys for columns:", filteredKeys);
+    return filteredKeys.map((key) => ({ id: key, label: key }));
+  }, [rowsArray, selectedTab]); // rowsArray 또는 selectedTab이 변경될 때만 재계산
 
   // 3. filteredData 계산 (계산된 columns와 rowsArray 포함)
-  console.log("DataTable: Calculating filteredData (without useMemo)");
-  // 이 객체는 FixedSizeList의 itemData로 전달됨
-  const filteredData = { columns: columns, rows: rowsArray };
-  console.log(
-    "DataTable: Preparing filteredData. Input rows:",
-    rowsArray.length,
-    "Calculated columns count:",
-    columns.length
-  );
+  const filteredData = useMemo(() => {
+    console.log("DataTable: Calculating filteredData (with useMemo)"); // 이제 useMemo 사용
+    console.log(
+      "DataTable: Preparing filteredData. Input rows:",
+      rowsArray.length,
+      "Calculated columns count:",
+      columns.length
+    );
+    // itemData는 columns와 rows를 모두 포함해야 함
+    return { columns: columns, rows: rowsArray };
+  }, [rowsArray, columns]); // rowsArray 또는 columns가 변경될 때만 재계산
 
-  // --- /useMemo 제거 ---
+  // --- /useMemo 복원 ---
 
-  // RowWrapper 함수 수정 (모든 컬럼 동적 렌더링 복원)
+  // RowWrapper 함수 (이전과 동일 - 모든 컬럼 동적 렌더링)
   const RowWrapper = ({ index, style, data }) => {
     // 데이터 유효성 체크 (columns 포함 확인)
     if (!data || !data.rows || !data.columns || !Array.isArray(data.columns)) {
@@ -294,10 +286,6 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
       console.warn(`RowWrapper ${index}: rowData is missing.`);
       return <div style={style}>Loading...</div>;
     }
-
-    console.log(
-      `RowWrapper ${index}: Rendering with rowData and ${currentColumns.length} columns.`
-    );
 
     // 1. Timestamp 값 처리 (이전과 동일)
     let displayTimestamp = "N/A";
@@ -441,39 +429,22 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
     );
   };
 
-  // DataTable 컴포넌트의 최종 return 문 수정 (FixedSizeList 복원)
-  console.log("Rendering DataTable. Is loading?", isLoading);
-  console.log("Filtered data for rendering:", filteredData);
+  // DataTable 컴포넌트의 최종 return 문
+  // console.log("Rendering DataTable. Is loading?", isLoading); // 디버깅 로그 제거 가능
+  // console.log("Filtered data for rendering:", filteredData); // 디버깅 로그 제거 가능
 
   const itemCount = filteredData?.rows?.length ?? 0;
-  const itemDataForList = filteredData; // columns와 rows를 포함하는 객체
+  const itemDataForList = filteredData;
 
-  console.log(
-    `DataTable: FixedSizeList Props Check: height=600, width=100%, itemCount=${itemCount}`
-  );
-  console.log(
-    "DataTable: FixedSizeList itemData keys:",
-    itemDataForList
-      ? Object.keys(itemDataForList)
-      : "itemData is null/undefined"
-  );
-  // itemData 구조 확인 로그 추가
-  if (
-    itemDataForList &&
-    (!Array.isArray(itemDataForList.rows) ||
-      !Array.isArray(itemDataForList.columns))
-  ) {
-    console.warn(
-      "DataTable: itemData structure issue detected! rows or columns might not be arrays.",
-      itemDataForList
-    );
-  }
+  // console.log(`DataTable: FixedSizeList Props Check: height=600, width=100%, itemCount=${itemCount}`); // 디버깅 로그 제거 가능
+  // console.log('DataTable: FixedSizeList itemData keys:', /* ... */); // 디버깅 로그 제거 가능
+  // if (...) { console.warn('DataTable: itemData structure issue detected! ...'); } // 디버깅 로그 제거 가능
 
   return (
-    // 테이블 컨테이너 div
     <div
       className="data-table-container"
-      style={{ height: 600, width: "100%", border: "1px dashed red" }}
+      // style={{ height: 600, width: "100%", border: "1px dashed red" }} // 테두리 제거 가능
+      style={{ height: 600, width: "100%" }}
     >
       {/* 로딩 중 표시 */}
       {isLoading && <div>데이터 로딩 중...</div>}
@@ -484,19 +455,16 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
       {!isLoading && !error && itemCount > 0 && (
         <>
           {renderHeader()} {/* 헤더 렌더링 */}
-          {/* --- FixedSizeList 복원 --- */}
           <FixedSizeList
-            height={560} // 전체 높이 - 헤더 높이 (40px)
-            itemCount={itemCount} // 계산된 행 수
-            itemSize={35} // 각 행의 예상 높이
-            itemData={itemDataForList} // { columns: [...], rows: [...] } 형태의 객체 전달
-            width="100%" // 너비
-            style={{ border: "1px solid blue" }} // 리스트 영역 확인용
+            height={560}
+            itemCount={itemCount}
+            itemSize={35}
+            itemData={itemDataForList}
+            width="100%"
+            // style={{ border: '1px solid blue' }} // 테두리 제거 가능
           >
-            {/* 자식으로 RowWrapper 함수 자체를 전달 */}
             {RowWrapper}
           </FixedSizeList>
-          {/* ----------------------- */}
         </>
       )}
 

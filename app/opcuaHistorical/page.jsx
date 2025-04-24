@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../opcua/realtimeOpcua.scss";
@@ -150,7 +150,7 @@ const getFilteredChartData = (historyData, selectedTab) => {
       );
 
       return {
-        type: "scattergl",//gpu사용
+        type: "scattergl", //gpu사용
         mode: "lines",
         name: fieldName,
         x: historyData.map((item) => new Date(item.timestamp)),
@@ -501,45 +501,241 @@ export default function OpcuaHistoricalPage() {
   const [exportError, setExportError] = useState(null);
   // opcuaData: 원본 데이터 저장용 (CSV 내보내기 등)
   const [opcuaData, setOpcuaData] = useState({
-    Total: { data: {}, history: [] },
-    PCS1: { data: {}, history: [] },
-    PCS2: { data: {}, history: [] },
-    PCS3: { data: {}, history: [] },
-    PCS4: { data: {}, history: [] },
+    Total: { history: [] },
+    PCS1: { history: [] },
+    PCS2: { history: [] },
+    PCS3: { history: [] },
+    PCS4: { history: [] },
   });
   // displayData: 화면 표시용 데이터 (초기엔 샘플링, 확대 시 상세)
   const [displayData, setDisplayData] = useState({ history: [] });
   const [selectedTab, setSelectedTab] = useState("Total");
   const [startDate, setStartDate] = useState(
-    new Date(Date.now() - 3 * 60 * 60 * 1000)
-  );
+    new Date(Date.now() - 1 * 60 * 60 * 1000)
+  ); // 기본 1시간
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showTable, setShowTable] = useState(false); // 차트 먼저 보이도록 false 유지
   const [isZoomed, setIsZoomed] = useState(false); // 현재 확대 상태인지 여부
 
-  const MAX_DISPLAY_POINTS = 500; // 화면에 표시할 최대 데이터 포인트 수 (조절 가능)
-  const ZOOM_DETAIL_THRESHOLD_MS = 5 * 60 * 1000; // 상세 데이터 로드 기준 시간 (예: 5분)
+  // --- 웹소켓 관련 상태 및 Ref ---
+  const [isConnected, setIsConnected] = useState(false); // 웹소켓 연결 상태
+  const ws = useRef(null); // 웹소켓 인스턴스 저장
 
-  // --- 로그 추가 ---
-  console.log("--- OpcuaHistoricalPage rendering ---");
-  console.log(
-    "OpcuaHistoricalPage state historyData:",
-    JSON.stringify(displayData)?.substring(0, 200) + "..."
-  ); // 상태 값 확인
-  console.log("OpcuaHistoricalPage state loading:", loading);
-  console.log("OpcuaHistoricalPage state error:", error);
-  console.log("OpcuaHistoricalPage state selectedTab:", selectedTab);
-  // ---------------
+  // --- 웹소켓 연결 설정 ---
+  useEffect(() => {
+    // 1. 웹소켓 접속 URL 문자열 생성
+    //    NEXT_PUBLIC_WS_URL 환경 변수가 있으면 사용하고, 없으면 현재 호스트 기반으로 생성
 
-  const handleExportData = () => {
-    const data = opcuaData[selectedTab].history; // 원본 데이터 사용
-    if (!data || data.length === 0) {
-      alert("내보낼 데이터가 없습니다.");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+    const wsUrl = apiUrl.replace(/^http/, "ws");
+    const wsUrlString = `${wsUrl}/api/opcua/historical/ws`;
+    // // const wsUrlString =
+    // //   process.env.NEXT_PUBLIC_WS_URL ||
+    //   `${window.location.origin.replace(
+    //     /^http/,
+    //     "ws"
+    //   )}/api/opcua/historical/ws`;
+
+    console.log("Attempting to connect WebSocket:", wsUrlString); // 생성된 URL 문자열 확인
+
+    try {
+      // 2. 생성된 URL 문자열로 WebSocket 객체 생성 및 ref에 할당
+      ws.current = new WebSocket(wsUrlString);
+
+      // 3. 이벤트 핸들러 등록
+      ws.current.onopen = () => {
+        console.log("WebSocket Connected");
+        setIsConnected(true);
+        setError(null); // 연결 성공 시 에러 초기화
+      };
+
+      ws.current.onclose = (event) => {
+        console.log("WebSocket Disconnected:", event.reason, event.code);
+        setIsConnected(false);
+        // 연결 끊김 시 적절한 에러 메시지 설정 (기존 로직 유지 또는 개선)
+        if (event.wasClean) {
+          console.log("WebSocket connection closed cleanly.");
+        } else {
+          // 예: 서버 프로세스 종료, 네트워크 오류 등
+          setError(
+            `웹소켓 연결이 끊어졌습니다 (코드: ${event.code}). 페이지를 새로고침하거나 다시 시도해주세요.`
+          );
+        }
+      };
+
+      ws.current.onerror = (err) => {
+        // onerror 이벤트 자체는 상세 정보를 제공하지 않는 경우가 많음
+        // 실제 오류는 onclose 이벤트의 코드를 통해 파악하는 것이 더 유용할 수 있음
+        console.error("WebSocket Error Object:", err);
+        setIsConnected(false);
+        // 에러 메시지를 좀 더 구체적으로 설정하거나, onclose 메시지에 의존
+        setError("웹소켓 연결 중 오류가 발생했습니다. 콘솔을 확인하세요.");
+      };
+
+      ws.current.onmessage = (event) => {
+        setLoading(false); // 메시지 수신 시 로딩 종료
+        try {
+          const message = JSON.parse(event.data);
+          console.log("WebSocket Message Received:", message);
+
+          // 서버가 보낸 메시지 구조에 따라 데이터 처리 (기존 로직 유지)
+          if (message.type === "historicalData") {
+            processHistoricalData(message.payload);
+          } else if (message.type === "error") {
+            console.error("WebSocket server error:", message.payload);
+            setError(
+              message.payload.message || "서버에서 오류가 발생했습니다."
+            );
+          }
+          // TODO: 필요한 경우 다른 메시지 타입 처리
+        } catch (e) {
+          console.error("Error processing WebSocket message:", e);
+          setError("수신된 데이터 처리 중 오류 발생");
+        }
+      };
+    } catch (error) {
+      console.error("Failed to create WebSocket:", error);
+      setError("WebSocket 생성 실패. URL을 확인하세요: " + wsUrlString);
+      setIsConnected(false);
+    }
+
+    // 컴포넌트 언마운트 시 웹소켓 연결 해제
+    return () => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        console.log("Closing WebSocket connection...");
+        ws.current.close();
+      } else if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
+        console.log("Closing WebSocket connection attempt...");
+        // 연결 시도 중일 때도 close() 호출 가능 (연결 시도 중단)
+        ws.current.close();
+      }
+    };
+  }, []); // 마운트 시 한 번만 실행
+
+  // --- 데이터 처리 함수: 웹소켓으로 받은 전체 데이터 처리 ---
+  // (이전 샘플링 방식의 processHistoricalData와 유사하게, isDetailed 구분 제거)
+  const processHistoricalData = (data) => {
+    try {
+      const rawHistoryData = data.timeSeriesData || [];
+      console.log(`✅ WebSocket 수신 데이터 수:`, rawHistoryData.length);
+
+      if (rawHistoryData.length > 0) {
+        const safeHistory = sanitizeHistoryData(rawHistoryData); // 필터링
+        console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]);
+
+        // opcuaData 업데이트 (전체 원본 저장)
+        setOpcuaData((prevData) => {
+          const newState = { ...prevData };
+          newState[selectedTab] = {
+            history: safeHistory,
+            data: safeHistory[safeHistory.length - 1] || {},
+          };
+          console.log(
+            `💾 원본 데이터 ${safeHistory.length}건 opcuaData에 저장 (${selectedTab} 탭)`
+          );
+          return newState;
+        });
+
+        // displayData 업데이트 (현재는 전체 데이터 그대로 사용)
+        // TODO: 필요 시 여기서도 샘플링을 적용할 수 있으나, 근본 해결책은 아님
+        setDisplayData({ history: safeHistory });
+        console.log(`📊 표시 데이터 ${safeHistory.length}건 설정`);
+      } else {
+        console.warn("⛔ 수신된 데이터가 없음");
+        setOpcuaData((prevData) => ({
+          ...prevData,
+          [selectedTab]: { history: [] },
+        }));
+        setDisplayData({ history: [] });
+      }
+    } catch (e) {
+      console.error("❌ 데이터 처리 중 오류:", e);
+      setError("데이터 형식 처리 오류");
+    }
+  };
+
+  // --- "조회" 버튼 클릭 핸들러: 웹소켓으로 요청 전송 ---
+  const handleSearchClick = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      setError("웹소켓이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
-    document.getElementById("csvDownloadLink").click();
+
+    console.log("Sending historical data request via WebSocket...");
+    setLoading(true); // 로딩 시작
+    setError(null);
+    // 기존 데이터 초기화 (새 조회 시작)
+    setOpcuaData((prev) => ({ ...prev, [selectedTab]: { history: [] } }));
+    setDisplayData({ history: [] });
+
+    const startTimeISO = startDate.toISOString();
+    const endTimeISO = endDate.toISOString();
+
+    const requestPayload = {
+      type: "getHistoricalData", // 서버와 약속된 요청 타입
+      payload: {
+        startTime: startTimeISO,
+        endTime: endTimeISO,
+        deviceGroup: selectedTab,
+      },
+    };
+
+    try {
+      ws.current.send(JSON.stringify(requestPayload));
+    } catch (err) {
+      console.error("WebSocket send error:", err);
+      setError("데이터 요청 전송 실패");
+      setLoading(false);
+    }
+  };
+
+  // --- CSV 내보내기 핸들러 ---
+  // 이 부분은 별도의 HTTP GET 엔드포인트(/api/opcua/historical/export)를 호출하는 이전 방식 유지 권장
+  const handleExportData = async () => {
+    setExportLoading(true);
+    setExportError(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+      const startTimeISO = startDate.toISOString();
+      const endTimeISO = endDate.toISOString();
+      const exportUrl = `${apiUrl}/api/opcua/historical/export?startTime=${encodeURIComponent(
+        startTimeISO
+      )}&endTime=${encodeURIComponent(
+        endTimeISO
+      )}&deviceGroup=${encodeURIComponent(selectedTab)}`;
+      console.log("CSV 내보내기 요청 URL (HTTP):", exportUrl);
+      window.location.href = exportUrl; // 간단한 다운로드 트리거
+      setTimeout(() => setExportLoading(false), 2000); // 임시 로딩 해제
+    } catch (err) {
+      console.error("CSV 내보내기 오류:", err);
+      setExportError("CSV 데이터 내보내는 중 오류 발생");
+      setExportLoading(false);
+    }
+  };
+
+  // --- 탭 변경 시 로직 ---
+  useEffect(() => {
+    // 탭 변경 시 해당 탭의 데이터를 보여주도록 displayData 업데이트
+    console.log(
+      `Tab changed to: ${selectedTab}. Updating display data from opcuaData.`
+    );
+    setDisplayData({ history: opcuaData[selectedTab]?.history || [] });
+    // 탭 변경 시 자동으로 데이터를 다시 로드하지 않음 (조회 버튼 눌러야 함)
+  }, [selectedTab, opcuaData]); // opcuaData도 의존성에 포함 (탭 데이터 반영 위해)
+
+  // --- sanitizeHistoryData, updateDateRange, 핸들러 등 나머지 함수는 거의 동일 ---
+  const sanitizeHistoryData = (data) => {
+    const newData = data.map((item) => {
+      const newItem = Object.fromEntries(
+        Object.entries(item).filter(
+          ([k, v]) => typeof v !== "object" || k === "timestamp"
+        )
+      );
+      return newItem;
+    });
+    return newData;
   };
 
   const updateDateRange = (changedDate, changeSource) => {
@@ -603,212 +799,15 @@ export default function OpcuaHistoricalPage() {
     }
   };
 
-  // --- 데이터 요청 함수 수정: 시작/종료 시간 인자 받도록 변경 ---
-  const fetchHistoricalData = useCallback(
-    async (
-      fetchStartTime = startDate,
-      fetchEndTime = endDate,
-      isDetailed = false
-    ) => {
-      // isDetailed: 상세 데이터 요청인지 여부 (백엔드 API가 이를 활용할 수 있음)
-      console.log(
-        `Fetching data: ${
-          isDetailed ? "DETAILED" : "OVERVIEW"
-        } from ${fetchStartTime.toISOString()} to ${fetchEndTime.toISOString()}`
-      );
-      try {
-        // 상세 데이터 요청 시에는 로딩 상태를 약간 다르게 표시할 수도 있음 (선택 사항)
-        if (!isDetailed) setLoading(true); // 전체 조회 시에만 메인 로딩 표시
-        setError(null);
-
-        const apiUrl =
-          process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-        const startTimeISO = fetchStartTime.toISOString();
-        const endTimeISO = fetchEndTime.toISOString();
-
-        console.log("API 요청 시간:", { start: startTimeISO, end: endTimeISO });
-        const response = await fetch(`${apiUrl}/api/opcua/historical`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            startTime: startTimeISO,
-            endTime: endTimeISO,
-            deviceGroup: selectedTab,
-            // API가 해상도 파라미터를 지원한다면 여기에 추가
-            // resolution: isDetailed ? 'high' : 'low'
-          }),
-        });
-
-        console.log("응답 상태:", response.status);
-        if (!response.ok)
-          throw new Error(`데이터 조회 실패: ${response.status}`);
-
-        const data = await response.json();
-        console.log("응답 데이터 항목 수:", data.timeSeriesData?.length || 0);
-
-        // 받은 데이터를 처리하는 함수 호출 (상세/개요 구분 전달)
-        processHistoricalData(data, isDetailed);
-      } catch (err) {
-        setError(err.message);
-        console.error("데이터 요청 오류:", err);
-        if (!isDetailed) {
-          // 전체 조회 실패 시에만 데이터 초기화
-          setOpcuaData((prev) => ({
-            ...prev,
-            [selectedTab]: { data: {}, history: [] },
-          }));
-          setDisplayData({ history: [] }); // 표시 데이터도 초기화
-        }
-      } finally {
-        if (!isDetailed) setLoading(false);
-      }
-    },
-    [startDate, endDate, selectedTab]
-  ); // 의존성 배열 확인
-
-  // --- 데이터 처리 함수 수정: 샘플링 로직 추가 및 상태 업데이트 분리 ---
-  const processHistoricalData = (data, isDetailed = false) => {
-    try {
-      const rawHistoryData = data.timeSeriesData || [];
-      console.log(
-        `✅ 원본 데이터 수 (${isDetailed ? "상세" : "개요"}):`,
-        rawHistoryData.length
-      );
-
-      if (rawHistoryData.length > 0) {
-        const safeHistory = sanitizeHistoryData(rawHistoryData); // 객체 필터링
-        console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]);
-
-        if (isDetailed) {
-          // 상세 데이터 요청 결과: displayData만 업데이트
-          console.log(
-            `🌟 상세 데이터 ${safeHistory.length}건 표시 데이터로 설정`
-          );
-          setDisplayData({ history: safeHistory });
-        } else {
-          // 전체(개요) 데이터 요청 결과: opcuaData와 displayData(샘플링) 모두 업데이트
-          console.log(
-            `💾 원본 데이터 ${safeHistory.length}건 opcuaData에 저장`
-          );
-          setOpcuaData((prevData) => {
-            // 원본 데이터 저장 (CSV용)
-            const newState = { ...prevData };
-            const lastDataPoint = safeHistory[safeHistory.length - 1] || {};
-            // 모든 탭에 할당할 필요 없음. 현재 탭만 업데이트
-            newState[selectedTab] = {
-              data: lastDataPoint,
-              history: safeHistory,
-            };
-            console.log(
-              `🔄 원본 데이터 상태 업데이트 완료 (${selectedTab} 탭)`
-            );
-            return newState;
-          });
-
-          // 화면 표시용 데이터 샘플링
-          const sampledHistory = sampleData(safeHistory, MAX_DISPLAY_POINTS);
-          console.log(
-            `📊 샘플링된 데이터 ${sampledHistory.length}건 표시 데이터로 설정`
-          );
-          setDisplayData({ history: sampledHistory });
-          setIsZoomed(false); // 전체 조회 후에는 확대 상태 해제
-        }
-      } else {
-        console.warn("⛔ 수신된 데이터가 없음");
-        if (!isDetailed) {
-          // 전체 조회 시 데이터 없음
-          setOpcuaData((prevData) => ({
-            ...prevData,
-            [selectedTab]: { data: {}, history: [] },
-          }));
-          setDisplayData({ history: [] });
-        } else {
-          // 상세 조회 시 데이터 없음 (이 경우는 거의 없지만)
-          // 필요시 처리 (예: 이전 샘플링 데이터로 복귀?)
-        }
-      }
-    } catch (e) {
-      console.error("❌ 데이터 처리 중 오류:", e);
-      setError("데이터 형식 오류");
-    }
-  };
-
-  // --- 차트 확대/축소 이벤트 핸들러 ---
-  const handleRelayout = useCallback(
-    (eventData) => {
-      console.log("Relayout event:", eventData);
-      // 'autosize' 이벤트 등 무시
-      if (eventData["autosize"] === true) return;
-
-      // x축 범위 변경 감지
-      const newXRangeStart = eventData["xaxis.range[0]"];
-      const newXRangeEnd = eventData["xaxis.range[1]"];
-
-      if (newXRangeStart && newXRangeEnd) {
-        const startTime = new Date(newXRangeStart);
-        const endTime = new Date(newXRangeEnd);
-        const durationMs = endTime.getTime() - startTime.getTime();
-
-        console.log(
-          `Zoom detected: ${startTime.toISOString()} - ${endTime.toISOString()} (${(
-            durationMs /
-            1000 /
-            60
-          ).toFixed(1)} min)`
-        );
-
-        // 확대된 범위가 임계값보다 작으면 상세 데이터 요청
-        if (durationMs < ZOOM_DETAIL_THRESHOLD_MS) {
-          console.log("Zoomed in enough, fetching detailed data...");
-          setIsZoomed(true); // 확대 상태로 설정
-          // *** 중요: fetchHistoricalData 호출 시 새로운 시간 범위 전달 ***
-          fetchHistoricalData(startTime, endTime, true); // isDetailed = true
-        } else {
-          // 충분히 확대되지 않았거나 다시 축소한 경우
-          if (isZoomed) {
-            // 이전에 확대된 상태였다면
-            console.log("Zoomed out, reverting to sampled data...");
-            // 원본 데이터에서 다시 샘플링하여 표시
-            const originalHistory = opcuaData[selectedTab]?.history || [];
-            const sampledHistory = sampleData(
-              originalHistory,
-              MAX_DISPLAY_POINTS
-            );
-            setDisplayData({ history: sampledHistory });
-            setIsZoomed(false); // 확대 상태 해제
-          }
-        }
-      } else if (eventData["xaxis.autorange"] === true) {
-        // 오토레인지 (전체보기)로 돌아간 경우
-        console.log("Autorange triggered, reverting to sampled data...");
-        const originalHistory = opcuaData[selectedTab]?.history || [];
-        const sampledHistory = sampleData(originalHistory, MAX_DISPLAY_POINTS);
-        setDisplayData({ history: sampledHistory });
-        setIsZoomed(false); // 확대 상태 해제
-      }
-    },
-    [fetchHistoricalData, selectedTab, opcuaData, isZoomed]
-  ); // 필요한 의존성 추가
-
-  // --- sanitizeHistoryData 함수 (기존과 동일) ---
-  const sanitizeHistoryData = (data) => {
-    const newData = data.map((item) => {
-      const newItem = Object.fromEntries(
-        Object.entries(item).filter(
-          ([k, v]) => typeof v !== "object" || k === "timestamp"
-        )
-      );
-      return newItem;
-    });
-    return newData;
-  };
-
-  // --- 초기 데이터 로드 (useEffect 사용) ---
-  useEffect(() => {
-    // 컴포넌트 마운트 시 또는 startDate, endDate, selectedTab 변경 시 초기 데이터(샘플링) 로드
-    // fetchHistoricalData(startDate, endDate, false); // isDetailed = false <-- 이 줄을 주석 처리 또는 삭제
-    // 더 이상 자동으로 데이터를 로드하지 않습니다.
-  }, [startDate, endDate, selectedTab, fetchHistoricalData]); // 의존성 배열은 유지해도 괜찮습니다. fetchHistoricalData가 useCallback으로 감싸져 있기 때문입니다.
+  // --- handleRelayout (확대/축소) ---
+  // 웹소켓 방식에서도 확대 시 데이터 요청 로직 구현 가능 (메시지 전송)
+  // 하지만 현재는 전체 데이터를 받는 방식이므로, 확대 시 추가 요청 불필요
+  // 필요하다면 스트리밍/청크 방식 도입 시 수정
+  const handleRelayout = useCallback((eventData) => {
+    console.log("Relayout event (WebSocket):", eventData);
+    // 현재 방식에서는 확대/축소 시 추가 데이터 요청 로직 불필요
+    // 만약 스트리밍/청크 방식이라면 여기서 서버에 추가 데이터 요청 메시지 전송
+  }, []);
 
   return (
     <div className="opcua-container">
@@ -838,11 +837,12 @@ export default function OpcuaHistoricalPage() {
             minDate={startDate}
           />
           <button
-            onClick={() => fetchHistoricalData(startDate, endDate, false)}
+            onClick={handleSearchClick} // 웹소켓 요청 핸들러
             className="search-button"
-            disabled={loading}
+            disabled={!isConnected || loading} // 연결 안 됐거나 로딩 중이면 비활성화
           >
-            {loading ? "조회 중..." : "조회"}
+            {/* 연결 상태 표시 추가 */}
+            {!isConnected ? "연결 중..." : loading ? "조회 중..." : "조회"}
           </button>
           <div style={{ display: "none" }}>
             <CSVLink
@@ -857,25 +857,33 @@ export default function OpcuaHistoricalPage() {
           <button
             onClick={handleExportData}
             className="export-button"
-            disabled={
-              exportLoading ||
-              loading ||
-              opcuaData[selectedTab]?.history.length === 0
-            }
+            disabled={exportLoading || loading}
             style={{ marginLeft: "10px" }}
           >
             {exportLoading ? "내보내는 중..." : "데이터 내보내기 (CSV)"}
           </button>
+          {exportError && (
+            <div style={{ color: "red", fontSize: "12px", marginLeft: "10px" }}>
+              {exportError}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 에러 메시지 표시 (기존과 동일) */}
+      {/* Connection/Error Message */}
       {error && (
         <div
           className="error-message"
           style={{ color: "red", marginTop: "10px", textAlign: "center" }}
         >
           {error}
+        </div>
+      )}
+      {!isConnected && !error && (
+        <div
+          style={{ color: "orange", marginTop: "10px", textAlign: "center" }}
+        >
+          웹소켓 서버에 연결 중입니다...
         </div>
       )}
 
@@ -985,7 +993,7 @@ export default function OpcuaHistoricalPage() {
               color: "#666",
             }}
           >
-            데이터가 없습니다. 검색 조건을 확인해보세요.
+            데이터가 없습니다. 기간 설정 후 '조회' 버튼을 누르세요.
           </div>
         ) : (
           <>
@@ -1013,7 +1021,9 @@ export default function OpcuaHistoricalPage() {
                           autorange: false,
                         },
                         uirevision:
-                          "total" + (isZoomed ? "-zoomed" : "-overview"),
+                          isConnected +
+                          "total" +
+                          opcuaData[selectedTab]?.history?.length,
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1047,7 +1057,9 @@ export default function OpcuaHistoricalPage() {
                           autorange: false,
                         },
                         uirevision:
-                          "pcs1" + (isZoomed ? "-zoomed" : "-overview"),
+                          isConnected +
+                          "pcs1" +
+                          opcuaData[selectedTab]?.history?.length,
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1081,7 +1093,9 @@ export default function OpcuaHistoricalPage() {
                           autorange: false,
                         },
                         uirevision:
-                          "pcs2" + (isZoomed ? "-zoomed" : "-overview"),
+                          isConnected +
+                          "pcs2" +
+                          opcuaData[selectedTab]?.history?.length,
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1115,7 +1129,9 @@ export default function OpcuaHistoricalPage() {
                           autorange: false,
                         },
                         uirevision:
-                          "pcs3" + (isZoomed ? "-zoomed" : "-overview"),
+                          isConnected +
+                          "pcs3" +
+                          opcuaData[selectedTab]?.history?.length,
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1149,7 +1165,9 @@ export default function OpcuaHistoricalPage() {
                           autorange: false,
                         },
                         uirevision:
-                          "pcs4" + (isZoomed ? "-zoomed" : "-overview"),
+                          isConnected +
+                          "pcs4" +
+                          opcuaData[selectedTab]?.history?.length,
                       }}
                       useResizeHandler={true}
                       style={{

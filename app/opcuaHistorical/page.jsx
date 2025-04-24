@@ -15,9 +15,9 @@ const Plot = dynamic(
   { ssr: false }
 );
 
-const CSVLink = dynamic(() => import("react-csv").then((mod) => mod.CSVLink), {
-  ssr: false,
-});
+// const CSVLink = dynamic(() => import("react-csv").then((mod) => mod.CSVLink), {
+//   ssr: false,
+// });
 
 // FixedSizeList 동적 import (ssr: false 적용)
 const FixedSizeList = dynamic(
@@ -844,7 +844,7 @@ export default function OpcuaHistoricalPage() {
             {/* 연결 상태 표시 추가 */}
             {!isConnected ? "연결 중..." : loading ? "조회 중..." : "조회"}
           </button>
-          <div style={{ display: "none" }}>
+          {/* <div style={{ display: "none" }}>
             <CSVLink
               id="csvDownloadLink"
               data={opcuaData[selectedTab].history}
@@ -853,7 +853,7 @@ export default function OpcuaHistoricalPage() {
               }.csv`}
               separator=","
             />
-          </div>
+          </div> */}
           <button
             onClick={handleExportData}
             className="export-button"

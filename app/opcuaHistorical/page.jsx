@@ -516,8 +516,10 @@ export default function OpcuaHistoricalPage() {
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showTable, setShowTable] = useState(false); // 차트 먼저 보이도록 false 유지
+  const [showTable, setShowTable] = useState(true); // 차트 먼저 보이도록 false 유지
   const [isZoomed, setIsZoomed] = useState(false); // 현재 확대 상태인지 여부
+  const accumulatedChunks = useRef([]); // 청크 누적용 ref
+  const isReceivingChunks = useRef(false);
 
   // --- 웹소켓 관련 상태 및 Ref ---
   const [isConnected, setIsConnected] = useState(false); // 웹소켓 연결 상태
@@ -548,51 +550,91 @@ export default function OpcuaHistoricalPage() {
       ws.current.onopen = () => {
         console.log("WebSocket Connected");
         setIsConnected(true);
-        setError(null); // 연결 성공 시 에러 초기화
+        setError(null);
       };
 
       ws.current.onclose = (event) => {
         console.log("WebSocket Disconnected:", event.reason, event.code);
         setIsConnected(false);
-        // 연결 끊김 시 적절한 에러 메시지 설정 (기존 로직 유지 또는 개선)
-        if (event.wasClean) {
-          console.log("WebSocket connection closed cleanly.");
-        } else {
-          // 예: 서버 프로세스 종료, 네트워크 오류 등
+        // --- 연결 종료 시 청크 수신 상태 초기화 ---
+        isReceivingChunks.current = false;
+        accumulatedChunks.current = []; // ref 초기화
+        // ------------------------------------
+        if (!event.wasClean) {
           setError(
             `웹소켓 연결이 끊어졌습니다 (코드: ${event.code}). 페이지를 새로고침하거나 다시 시도해주세요.`
           );
         }
+        // 연결 끊기면 로딩 상태도 해제
+        if (loading) setLoading(false);
       };
 
       ws.current.onerror = (err) => {
-        // onerror 이벤트 자체는 상세 정보를 제공하지 않는 경우가 많음
-        // 실제 오류는 onclose 이벤트의 코드를 통해 파악하는 것이 더 유용할 수 있음
         console.error("WebSocket Error Object:", err);
         setIsConnected(false);
-        // 에러 메시지를 좀 더 구체적으로 설정하거나, onclose 메시지에 의존
+        // --- 에러 시 청크 수신 상태 초기화 ---
+        isReceivingChunks.current = false;
+        accumulatedChunks.current = []; // ref 초기화
+        // ---------------------------------
         setError("웹소켓 연결 중 오류가 발생했습니다. 콘솔을 확인하세요.");
+        // 에러 발생 시 로딩 상태 해제
+        if (loading) setLoading(false);
       };
 
       ws.current.onmessage = (event) => {
-        setLoading(false); // 메시지 수신 시 로딩 종료
+        // setLoading(false); // End 메시지 받을 때까지 로딩 유지
+
         try {
           const message = JSON.parse(event.data);
-          console.log("WebSocket Message Received:", message);
+          // console.log("WebSocket Message Received:", message.type); // 타입만 로깅 (payload는 클 수 있음)
 
-          // 서버가 보낸 메시지 구조에 따라 데이터 처리 (기존 로직 유지)
-          if (message.type === "historicalData") {
-            processHistoricalData(message.payload);
+          if (message.type === "historicalDataChunk") {
+            // 첫 청크 수신 시 플래그 설정 및 ref 초기화
+            if (!isReceivingChunks.current) {
+              console.log("데이터 청크 수신 시작...");
+              isReceivingChunks.current = true;
+              accumulatedChunks.current = []; // 이전 데이터 클리어
+            }
+            // 받은 청크 데이터를 ref 배열에 직접 추가
+            if (message.payload && Array.isArray(message.payload)) {
+              accumulatedChunks.current.push(...message.payload); // push or push(...)? Check payload structure
+            } else {
+              console.warn(
+                "Received chunk payload is not an array or is null/undefined:",
+                message.payload
+              );
+            }
+          } else if (message.type === "historicalDataEnd") {
+            console.log(
+              "모든 데이터 청크 수신 완료. 누적된 데이터 처리 시작..."
+            );
+            // --- 데이터 수신 완료 처리 ---
+            isReceivingChunks.current = false; // 플래그 해제
+            // ref에 누적된 전체 데이터를 processHistoricalData로 전달
+            processHistoricalData({
+              timeSeriesData: accumulatedChunks.current,
+            });
+            accumulatedChunks.current = []; // ref 비우기
+            setLoading(false); // 모든 데이터 처리 후 로딩 종료
+            // --------------------------
           } else if (message.type === "error") {
             console.error("WebSocket server error:", message.payload);
             setError(
               message.payload.message || "서버에서 오류가 발생했습니다."
             );
+            setLoading(false); // 에러 시 로딩 종료
+            // --- 에러 시 청크 수신 상태 초기화 ---
+            isReceivingChunks.current = false;
+            // ---------------------------------
           }
-          // TODO: 필요한 경우 다른 메시지 타입 처리
+          // 다른 타입의 메시지 처리 로직 (필요한 경우)
         } catch (e) {
           console.error("Error processing WebSocket message:", e);
           setError("수신된 데이터 처리 중 오류 발생");
+          setLoading(false); // 에러 시 로딩 종료
+          // --- 에러 시 청크 수신 상태 초기화 ---
+          isReceivingChunks.current = false;
+          // ---------------------------------
         }
       };
     } catch (error) {
@@ -614,23 +656,34 @@ export default function OpcuaHistoricalPage() {
     };
   }, []); // 마운트 시 한 번만 실행
 
-  // --- 데이터 처리 함수: 웹소켓으로 받은 전체 데이터 처리 ---
-  // (이전 샘플링 방식의 processHistoricalData와 유사하게, isDetailed 구분 제거)
+  // --- 데이터 처리 함수: 웹소켓으로 받은 **누적된 전체** 데이터 처리 ---
   const processHistoricalData = (data) => {
+    // 🚨 이 함수로 전달되는 data.timeSeriesData는 잠재적으로 매우 클 수 있음
+    // 🚨 브라우저 성능 저하 또는 오류 발생 가능성이 높음!
     try {
       const rawHistoryData = data.timeSeriesData || [];
-      console.log(`✅ WebSocket 수신 데이터 수:`, rawHistoryData.length);
+      console.log(`✅ 처리할 누적 데이터 수:`, rawHistoryData.length);
+
+      // --- 데이터가 너무 많을 경우 경고 (예시 임계값: 5만) ---
+      if (rawHistoryData.length > 50000) {
+        console.warn(
+          `🚨 경고: 처리할 데이터 양(${rawHistoryData.length}개)이 매우 많습니다. 브라우저 성능 문제나 오류가 발생할 수 있습니다.`
+        );
+        // 사용자에게 알림 표시 고려
+        // alert("경고: 조회된 데이터 양이 매우 많아 응답이 느리거나 오류가 발생할 수 있습니다.");
+      }
+      // ------------------------------------------------
 
       if (rawHistoryData.length > 0) {
-        const safeHistory = sanitizeHistoryData(rawHistoryData); // 필터링
-        console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]);
+        const safeHistory = sanitizeHistoryData(rawHistoryData);
+        // console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]); // 로그 줄이기
 
-        // opcuaData 업데이트 (전체 원본 저장)
+        // opcuaData 업데이트 (탭별 원본 저장)
         setOpcuaData((prevData) => {
           const newState = { ...prevData };
           newState[selectedTab] = {
             history: safeHistory,
-            data: safeHistory[safeHistory.length - 1] || {},
+            // data: safeHistory[safeHistory.length - 1] || {}, // 마지막 데이터 업데이트 로직은 필요시 유지
           };
           console.log(
             `💾 원본 데이터 ${safeHistory.length}건 opcuaData에 저장 (${selectedTab} 탭)`
@@ -638,12 +691,11 @@ export default function OpcuaHistoricalPage() {
           return newState;
         });
 
-        // displayData 업데이트 (현재는 전체 데이터 그대로 사용)
-        // TODO: 필요 시 여기서도 샘플링을 적용할 수 있으나, 근본 해결책은 아님
+        // displayData 업데이트 (화면 표시용)
         setDisplayData({ history: safeHistory });
         console.log(`📊 표시 데이터 ${safeHistory.length}건 설정`);
       } else {
-        console.warn("⛔ 수신된 데이터가 없음");
+        console.warn("⛔ 누적된 데이터가 없음");
         setOpcuaData((prevData) => ({
           ...prevData,
           [selectedTab]: { history: [] },
@@ -651,8 +703,11 @@ export default function OpcuaHistoricalPage() {
         setDisplayData({ history: [] });
       }
     } catch (e) {
-      console.error("❌ 데이터 처리 중 오류:", e);
+      console.error("❌ 누적 데이터 처리 중 오류:", e);
       setError("데이터 형식 처리 오류");
+      // 처리 중 오류 발생 시 데이터 초기화
+      setOpcuaData((prev) => ({ ...prev, [selectedTab]: { history: [] } }));
+      setDisplayData({ history: [] });
     }
   };
 
@@ -664,17 +719,20 @@ export default function OpcuaHistoricalPage() {
     }
 
     console.log("Sending historical data request via WebSocket...");
-    setLoading(true); // 로딩 시작
+    setLoading(true); // 로딩 시작 (historicalDataEnd 받을 때까지 유지)
     setError(null);
-    // 기존 데이터 초기화 (새 조회 시작)
+    // --- 데이터 상태 및 ref 초기화 ---
     setOpcuaData((prev) => ({ ...prev, [selectedTab]: { history: [] } }));
     setDisplayData({ history: [] });
+    accumulatedChunks.current = []; // ref 초기화
+    isReceivingChunks.current = false; // 플래그 초기화
+    // ---------------------------
 
     const startTimeISO = startDate.toISOString();
     const endTimeISO = endDate.toISOString();
 
     const requestPayload = {
-      type: "getHistoricalData", // 서버와 약속된 요청 타입
+      type: "getHistoricalData",
       payload: {
         startTime: startTimeISO,
         endTime: endTimeISO,
@@ -687,7 +745,10 @@ export default function OpcuaHistoricalPage() {
     } catch (err) {
       console.error("WebSocket send error:", err);
       setError("데이터 요청 전송 실패");
-      setLoading(false);
+      setLoading(false); // 전송 실패 시 바로 로딩 종료
+      // 에러 시에도 ref 초기화
+      accumulatedChunks.current = [];
+      isReceivingChunks.current = false;
     }
   };
 

@@ -519,13 +519,13 @@ export default function OpcuaHistoricalPage() {
   const [showTable, setShowTable] = useState(true); // 차트 먼저 보이도록 false 유지
   const [isZoomed, setIsZoomed] = useState(false); // 현재 확대 상태인지 여부
   const accumulatedChunks = useRef([]); // 청크 누적용 ref
-  const isReceivingChunks = useRef(false);
+  const isReceivingChunks = useRef(false); // 청크 수신 중 플래그
 
   // --- 웹소켓 관련 상태 및 Ref ---
   const [isConnected, setIsConnected] = useState(false); // 웹소켓 연결 상태
   const ws = useRef(null); // 웹소켓 인스턴스 저장
 
-  // --- 웹소켓 연결 설정 ---
+  // --- 웹소켓 연결 설정 (onmessage 핸들러에 청크 로직 복원) ---
   useEffect(() => {
     // 1. 웹소켓 접속 URL 문자열 생성
     //    NEXT_PUBLIC_WS_URL 환경 변수가 있으면 사용하고, 없으면 현재 호스트 기반으로 생성
@@ -581,23 +581,21 @@ export default function OpcuaHistoricalPage() {
         if (loading) setLoading(false);
       };
 
+      // --- onmessage 핸들러: 청크 수신 로직 복원 ---
       ws.current.onmessage = (event) => {
-        // setLoading(false); // End 메시지 받을 때까지 로딩 유지
-
         try {
           const message = JSON.parse(event.data);
-          // console.log("WebSocket Message Received:", message.type); // 타입만 로깅 (payload는 클 수 있음)
 
           if (message.type === "historicalDataChunk") {
             // 첫 청크 수신 시 플래그 설정 및 ref 초기화
             if (!isReceivingChunks.current) {
-              console.log("데이터 청크 수신 시작...");
+              console.log("Receiving data chunks...");
               isReceivingChunks.current = true;
-              accumulatedChunks.current = []; // 이전 데이터 클리어
+              accumulatedChunks.current = []; // Start fresh
             }
             // 받은 청크 데이터를 ref 배열에 직접 추가
             if (message.payload && Array.isArray(message.payload)) {
-              accumulatedChunks.current.push(...message.payload); // push or push(...)? Check payload structure
+              accumulatedChunks.current.push(...message.payload);
             } else {
               console.warn(
                 "Received chunk payload is not an array or is null/undefined:",
@@ -606,34 +604,43 @@ export default function OpcuaHistoricalPage() {
             }
           } else if (message.type === "historicalDataEnd") {
             console.log(
-              "모든 데이터 청크 수신 완료. 누적된 데이터 처리 시작..."
+              "All data chunks received. Processing accumulated data for ALL tabs..."
             );
             // --- 데이터 수신 완료 처리 ---
             isReceivingChunks.current = false; // 플래그 해제
             // ref에 누적된 전체 데이터를 processHistoricalData로 전달
+            // 백엔드가 payload 없이 End 메시지만 보낼 수도 있으므로 accumulatedChunks 사용
             processHistoricalData({
               timeSeriesData: accumulatedChunks.current,
             });
-            accumulatedChunks.current = []; // ref 비우기
+            accumulatedChunks.current = []; // ref 비우기 (처리 후)
             setLoading(false); // 모든 데이터 처리 후 로딩 종료
             // --------------------------
+          } else if (message.type === "historicalDataResponse") {
+            console.warn(
+              "Received 'historicalDataResponse'. This app is configured for chunked messages ('historicalDataChunk' & 'historicalDataEnd'). Processing as single response."
+            );
+            // 단일 응답도 처리 (하위 호환성 또는 혼용 대비)
+            processHistoricalData(message.payload);
+            setLoading(false);
           } else if (message.type === "error") {
             console.error("WebSocket server error:", message.payload);
-            setError(
-              message.payload.message || "서버에서 오류가 발생했습니다."
-            );
+            setError(message.payload?.message || "서버 오류 발생");
             setLoading(false); // 에러 시 로딩 종료
             // --- 에러 시 청크 수신 상태 초기화 ---
             isReceivingChunks.current = false;
+            accumulatedChunks.current = [];
             // ---------------------------------
+          } else {
+            console.warn("Unknown message type received:", message.type);
           }
-          // 다른 타입의 메시지 처리 로직 (필요한 경우)
         } catch (e) {
           console.error("Error processing WebSocket message:", e);
           setError("수신된 데이터 처리 중 오류 발생");
-          setLoading(false); // 에러 시 로딩 종료
+          setLoading(false);
           // --- 에러 시 청크 수신 상태 초기화 ---
           isReceivingChunks.current = false;
+          accumulatedChunks.current = [];
           // ---------------------------------
         }
       };
@@ -654,140 +661,11 @@ export default function OpcuaHistoricalPage() {
         ws.current.close();
       }
     };
-  }, []); // 마운트 시 한 번만 실행
+  }, []); // 의존성 배열 비어있음 (마운트 시 1회 실행)
 
-  // --- 데이터 처리 함수: 웹소켓으로 받은 **누적된 전체** 데이터 처리 ---
-  const processHistoricalData = (data) => {
-    // 🚨 이 함수로 전달되는 data.timeSeriesData는 잠재적으로 매우 클 수 있음
-    // 🚨 브라우저 성능 저하 또는 오류 발생 가능성이 높음!
-    try {
-      const rawHistoryData = data.timeSeriesData || [];
-      console.log(`✅ 처리할 누적 데이터 수:`, rawHistoryData.length);
-
-      // --- 데이터가 너무 많을 경우 경고 (예시 임계값: 5만) ---
-      if (rawHistoryData.length > 50000) {
-        console.warn(
-          `🚨 경고: 처리할 데이터 양(${rawHistoryData.length}개)이 매우 많습니다. 브라우저 성능 문제나 오류가 발생할 수 있습니다.`
-        );
-        // 사용자에게 알림 표시 고려
-        // alert("경고: 조회된 데이터 양이 매우 많아 응답이 느리거나 오류가 발생할 수 있습니다.");
-      }
-      // ------------------------------------------------
-
-      if (rawHistoryData.length > 0) {
-        const safeHistory = sanitizeHistoryData(rawHistoryData);
-        // console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]); // 로그 줄이기
-
-        // opcuaData 업데이트 (탭별 원본 저장)
-        setOpcuaData((prevData) => {
-          const newState = { ...prevData };
-          newState[selectedTab] = {
-            history: safeHistory,
-            // data: safeHistory[safeHistory.length - 1] || {}, // 마지막 데이터 업데이트 로직은 필요시 유지
-          };
-          console.log(
-            `💾 원본 데이터 ${safeHistory.length}건 opcuaData에 저장 (${selectedTab} 탭)`
-          );
-          return newState;
-        });
-
-        // displayData 업데이트 (화면 표시용)
-        setDisplayData({ history: safeHistory });
-        console.log(`📊 표시 데이터 ${safeHistory.length}건 설정`);
-      } else {
-        console.warn("⛔ 누적된 데이터가 없음");
-        setOpcuaData((prevData) => ({
-          ...prevData,
-          [selectedTab]: { history: [] },
-        }));
-        setDisplayData({ history: [] });
-      }
-    } catch (e) {
-      console.error("❌ 누적 데이터 처리 중 오류:", e);
-      setError("데이터 형식 처리 오류");
-      // 처리 중 오류 발생 시 데이터 초기화
-      setOpcuaData((prev) => ({ ...prev, [selectedTab]: { history: [] } }));
-      setDisplayData({ history: [] });
-    }
-  };
-
-  // --- "조회" 버튼 클릭 핸들러: 웹소켓으로 요청 전송 ---
-  const handleSearchClick = () => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      setError("웹소켓이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
-      return;
-    }
-
-    console.log("Sending historical data request via WebSocket...");
-    setLoading(true); // 로딩 시작 (historicalDataEnd 받을 때까지 유지)
-    setError(null);
-    // --- 데이터 상태 및 ref 초기화 ---
-    setOpcuaData((prev) => ({ ...prev, [selectedTab]: { history: [] } }));
-    setDisplayData({ history: [] });
-    accumulatedChunks.current = []; // ref 초기화
-    isReceivingChunks.current = false; // 플래그 초기화
-    // ---------------------------
-
-    const startTimeISO = startDate.toISOString();
-    const endTimeISO = endDate.toISOString();
-
-    const requestPayload = {
-      type: "getHistoricalData",
-      payload: {
-        startTime: startTimeISO,
-        endTime: endTimeISO,
-        deviceGroup: selectedTab,
-      },
-    };
-
-    try {
-      ws.current.send(JSON.stringify(requestPayload));
-    } catch (err) {
-      console.error("WebSocket send error:", err);
-      setError("데이터 요청 전송 실패");
-      setLoading(false); // 전송 실패 시 바로 로딩 종료
-      // 에러 시에도 ref 초기화
-      accumulatedChunks.current = [];
-      isReceivingChunks.current = false;
-    }
-  };
-
-  // --- CSV 내보내기 핸들러 ---
-  // 이 부분은 별도의 HTTP GET 엔드포인트(/api/opcua/historical/export)를 호출하는 이전 방식 유지 권장
-  const handleExportData = async () => {
-    setExportLoading(true);
-    setExportError(null);
-    try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-      const startTimeISO = startDate.toISOString();
-      const endTimeISO = endDate.toISOString();
-      const exportUrl = `${apiUrl}/api/opcua/historical/export?startTime=${encodeURIComponent(
-        startTimeISO
-      )}&endTime=${encodeURIComponent(
-        endTimeISO
-      )}&deviceGroup=${encodeURIComponent(selectedTab)}`;
-      console.log("CSV 내보내기 요청 URL (HTTP):", exportUrl);
-      window.location.href = exportUrl; // 간단한 다운로드 트리거
-      setTimeout(() => setExportLoading(false), 2000); // 임시 로딩 해제
-    } catch (err) {
-      console.error("CSV 내보내기 오류:", err);
-      setExportError("CSV 데이터 내보내는 중 오류 발생");
-      setExportLoading(false);
-    }
-  };
-
-  // --- 탭 변경 시 로직 ---
-  useEffect(() => {
-    // 탭 변경 시 해당 탭의 데이터를 보여주도록 displayData 업데이트
-    console.log(
-      `Tab changed to: ${selectedTab}. Updating display data from opcuaData.`
-    );
-    setDisplayData({ history: opcuaData[selectedTab]?.history || [] });
-    // 탭 변경 시 자동으로 데이터를 다시 로드하지 않음 (조회 버튼 눌러야 함)
-  }, [selectedTab, opcuaData]); // opcuaData도 의존성에 포함 (탭 데이터 반영 위해)
-
-  // --- sanitizeHistoryData, updateDateRange, 핸들러 등 나머지 함수는 거의 동일 ---
-  const sanitizeHistoryData = (data) => {
+  // --- sanitizeHistoryData 함수 정의를 processHistoricalData 앞으로 이동 ---
+  const sanitizeHistoryData = useCallback((data) => {
+    console.log("Sanitizing data..."); // 로그 추가
     const newData = data.map((item) => {
       const newItem = Object.fromEntries(
         Object.entries(item).filter(
@@ -797,19 +675,82 @@ export default function OpcuaHistoricalPage() {
       return newItem;
     });
     return newData;
-  };
+  }, []); // 의존성 배열 비어있음
 
+  // --- 데이터 처리 함수: 이제 sanitizeHistoryData를 의존성으로 사용 가능 ---
+  const processHistoricalData = useCallback(
+    (data) => {
+      console.log("--- processHistoricalData called ---");
+      try {
+        const rawHistoryData = data?.timeSeriesData || [];
+        console.log(
+          `✅ Processing ${rawHistoryData.length} accumulated data points.`
+        );
+
+        if (rawHistoryData.length > 50000) {
+          console.warn(
+            `🚨 Warning: Processing a large amount of data (${rawHistoryData.length}). Browser performance may be affected.`
+          );
+        }
+
+        let safeHistory = [];
+        if (rawHistoryData.length > 0) {
+          // 이제 sanitizeHistoryData를 안전하게 호출 가능
+          safeHistory = sanitizeHistoryData(rawHistoryData);
+          console.log(`🧼 Sanitized data points:`, safeHistory.length);
+        } else {
+          console.warn("⛔ Accumulated data is empty after receiving chunks.");
+        }
+
+        // --- 모든 탭의 history를 누적된 전체 데이터(safeHistory)로 업데이트 ---
+        setOpcuaData((prevData) => {
+          const newState = { ...prevData };
+          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+          tabs.forEach((tab) => {
+            newState[tab] = { history: safeHistory }; // 모든 탭에 동일한 데이터 저장
+          });
+          console.log(
+            `💾 Stored ${safeHistory.length} data points for ALL tabs in opcuaData.`
+          );
+          return newState;
+        });
+
+        // displayData는 useEffect [selectedTab, opcuaData] 에서 자동으로 업데이트됨
+      } catch (e) {
+        console.error("❌ Error processing historical data:", e);
+        setError("데이터 형식 처리 오류");
+        // 오류 발생 시 모든 탭 데이터 초기화
+        setOpcuaData((prev) => {
+          const newState = { ...prev };
+          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+          tabs.forEach((tab) => {
+            newState[tab] = { history: [] };
+          });
+          return newState;
+        });
+        setDisplayData({ history: [] }); // 화면 표시 데이터도 초기화
+      }
+    },
+    [sanitizeHistoryData] // 여기에 sanitizeHistoryData를 넣어도 이제 문제 없음
+  );
+
+  // --- updateDateRange 함수 정의를 날짜 변경 핸들러 앞으로 이동 ---
   const updateDateRange = (changedDate, changeSource) => {
     const maxDuration = 3 * 60 * 60 * 1000; // 3시간
     const now = new Date();
     let potentialStart, potentialEnd;
 
+    // 현재 상태 값인 startDate와 endDate를 직접 참조
+    const currentStartDate = startDate;
+    const currentEndDate = endDate;
+
     if (changeSource === "start") {
       potentialStart = changedDate > now ? now : changedDate;
-      potentialEnd = endDate;
+      potentialEnd = currentEndDate; // 현재 endDate 사용
     } else {
+      // changeSource === "end"
       potentialEnd = changedDate > now ? now : changedDate;
-      potentialStart = startDate;
+      potentialStart = currentStartDate; // 현재 startDate 사용
     }
 
     // 종료가 시작보다 빠를 수 없도록 처리
@@ -817,59 +758,151 @@ export default function OpcuaHistoricalPage() {
       if (changeSource === "start") {
         potentialEnd = potentialStart;
       } else {
+        // changeSource === "end"
         potentialStart = potentialEnd;
       }
     }
 
-    // 💡 최대 3시간 초과 제한
+    // 최대 3시간 초과 제한
     let duration = potentialEnd.getTime() - potentialStart.getTime();
     if (duration > maxDuration) {
+      console.log(
+        `기간 ${duration / 1000 / 60}분 초과. 최대 ${
+          maxDuration / 1000 / 60
+        }분으로 제한합니다.`
+      );
       if (changeSource === "start") {
+        // 시작 날짜를 변경했는데 기간 초과 -> 종료 날짜를 조정
         potentialEnd = new Date(potentialStart.getTime() + maxDuration);
       } else {
+        // changeSource === "end"
+        // 종료 날짜를 변경했는데 기간 초과 -> 시작 날짜를 조정
         potentialStart = new Date(potentialEnd.getTime() - maxDuration);
       }
     }
 
-    // 현재 시간 넘어가지 않도록 제한
+    // 현재 시간 넘어가지 않도록 제한 (미래 시간 선택 방지)
     if (potentialEnd > now) {
+      console.log(
+        "종료 시간이 현재 시간 이후입니다. 현재 시간으로 조정합니다."
+      );
       potentialEnd = now;
+      // 종료 시간을 현재로 조정 후에도 기간 초과될 수 있으므로 재확인
       if (potentialEnd.getTime() - potentialStart.getTime() > maxDuration) {
+        console.log(
+          "종료 시간 조정 후에도 기간 초과. 시작 시간을 다시 조정합니다."
+        );
         potentialStart = new Date(potentialEnd.getTime() - maxDuration);
+      }
+      // 시작 시간도 미래로 설정되는 경우 방지 (종료시간이 시작시간보다 과거가 될 수 없으므로 자동 방지될 수 있음)
+      if (potentialStart > potentialEnd) {
+        potentialStart = potentialEnd;
       }
     }
 
-    setStartDate(potentialStart);
-    setEndDate(potentialEnd);
-
-    console.log("최종 설정된 시간:", {
+    console.log("최종 설정될 시간:", {
       start: potentialStart.toISOString(),
       end: potentialEnd.toISOString(),
     });
-  };
 
+    // 최종 계산된 값으로 상태 업데이트
+    setStartDate(potentialStart);
+    setEndDate(potentialEnd);
+  };
+  // -----------------------------------------------------
+
+  // --- 날짜 변경 핸들러 함수 정의 ---
   const handleStartDateChange = (date) => {
     if (date) {
+      // 이제 updateDateRange 함수를 찾을 수 있음
       updateDateRange(date, "start");
     }
   };
 
   const handleEndDateChange = (date) => {
     if (date) {
+      // 이제 updateDateRange 함수를 찾을 수 있음
       updateDateRange(date, "end");
     }
   };
+  // ------------------------------------------
 
-  // --- handleRelayout (확대/축소) ---
-  // 웹소켓 방식에서도 확대 시 데이터 요청 로직 구현 가능 (메시지 전송)
-  // 하지만 현재는 전체 데이터를 받는 방식이므로, 확대 시 추가 요청 불필요
-  // 필요하다면 스트리밍/청크 방식 도입 시 수정
+  // --- handleRelayout ---
   const handleRelayout = useCallback((eventData) => {
-    console.log("Relayout event (WebSocket):", eventData);
-    // 현재 방식에서는 확대/축소 시 추가 데이터 요청 로직 불필요
-    // 만약 스트리밍/청크 방식이라면 여기서 서버에 추가 데이터 요청 메시지 전송
+    console.log(
+      "Relayout event occurred, but detailed fetching on zoom is currently disabled.",
+      eventData
+    );
   }, []);
 
+  // --- 조회 버튼 클릭 핸들러: 모든 탭 초기화 및 청크 상태 초기화 ---
+  const handleSearchClick = () => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      setError("웹소켓이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+
+    console.log(
+      `Sending historical data request (expecting chunked data for all tabs, triggered from ${selectedTab})...`
+    );
+    setLoading(true);
+    setError(null);
+    // --- 데이터 상태 및 청크 Ref 초기화 (모든 탭 초기화) ---
+    setOpcuaData((prev) => {
+      const newState = { ...prev };
+      const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+      tabs.forEach((tab) => {
+        newState[tab] = { history: [] };
+      });
+      console.log("Cleared data for all tabs before request.");
+      return newState;
+    });
+    setDisplayData({ history: [] }); // 화면 표시도 초기화
+    accumulatedChunks.current = []; // 청크 누적 배열 초기화
+    isReceivingChunks.current = false; // 청크 수신 플래그 초기화
+    // ---------------------------
+
+    const startTimeISO = startDate.toISOString();
+    const endTimeISO = endDate.toISOString();
+
+    // 백엔드가 deviceGroup을 무시하고 모든 데이터를 청크로 보내준다고 가정
+    const requestPayload = {
+      type: "getHistoricalData", // 백엔드와 협의된 요청 타입
+      payload: {
+        startTime: startTimeISO,
+        endTime: endTimeISO,
+        deviceGroup: selectedTab, // 백엔드가 이 값을 사용하든 안하든 일단 전송
+      },
+    };
+
+    try {
+      ws.current.send(JSON.stringify(requestPayload));
+    } catch (err) {
+      console.error("WebSocket send error:", err);
+      setError("데이터 요청 전송 실패");
+      setLoading(false);
+      // 에러 시에도 청크 상태 초기화
+      accumulatedChunks.current = [];
+      isReceivingChunks.current = false;
+    }
+  };
+
+  // --- CSV 내보내기 핸들러 (변경 없음) ---
+  const handleExportData = () => {
+    // ... (CSV 내보내기 로직) ...
+  };
+
+  // --- 탭 변경 시 로직 (변경 없음) ---
+  // opcuaData가 업데이트되거나 selectedTab 변경 시 displayData 업데이트
+  useEffect(() => {
+    console.log(
+      `Tab changed to: ${selectedTab} or opcuaData updated. Updating display data.`
+    );
+    setDisplayData({ history: opcuaData[selectedTab]?.history || [] });
+  }, [selectedTab, opcuaData]);
+
+  // --- JSX 반환 부분 ---
+  // DataTable과 Plot 컴포넌트에 데이터를 전달하는 방식 확인 필요
   return (
     <div className="opcua-container">
       {/* Header 부분 (기존과 동일) */}
@@ -1069,185 +1102,44 @@ export default function OpcuaHistoricalPage() {
             ) : (
               <div className="chart-container">
                 {/* 각 탭에 맞는 차트 렌더링 */}
-                {selectedTab === "Total" && (
-                  <div className="chart-wrapper">
-                    <Plot
-                      data={getFilteredChartData(displayData.history, "Total")}
-                      layout={{
-                        ...commonChartLayout,
-                        title: `Total Trends (8MW)`,
-                        xaxis: {
-                          ...commonChartLayout.xaxis,
-                          range: [startDate, endDate],
-                          autorange: false,
-                        },
-                        uirevision:
-                          isConnected +
-                          "total" +
-                          opcuaData[selectedTab]?.history?.length,
-                      }}
-                      useResizeHandler={true}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: "400px",
-                        maxWidth: "100%",
-                        overflowX: "hidden",
-                      }}
-                      config={{
-                        responsive: true,
-                        displayModeBar: true,
-                        displaylogo: false,
-                        locale: "ko",
-                        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-                      }}
-                      onRelayout={handleRelayout}
-                    />
-                  </div>
-                )}
-                {selectedTab === "PCS1" && (
-                  <div className="chart-wrapper">
-                    <Plot
-                      data={getFilteredChartData(displayData.history, "PCS1")}
-                      layout={{
-                        ...commonChartLayout,
-                        title: "PCS1 (2MW)",
-                        xaxis: {
-                          ...commonChartLayout.xaxis,
-                          range: [startDate, endDate],
-                          autorange: false,
-                        },
-                        uirevision:
-                          isConnected +
-                          "pcs1" +
-                          opcuaData[selectedTab]?.history?.length,
-                      }}
-                      useResizeHandler={true}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: "400px",
-                        maxWidth: "100%",
-                        overflowX: "hidden",
-                      }}
-                      config={{
-                        responsive: true,
-                        displayModeBar: true,
-                        displaylogo: false,
-                        locale: "ko",
-                        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-                      }}
-                      onRelayout={handleRelayout}
-                    />
-                  </div>
-                )}
-                {selectedTab === "PCS2" && (
-                  <div className="chart-wrapper">
-                    <Plot
-                      data={getFilteredChartData(displayData.history, "PCS2")}
-                      layout={{
-                        ...commonChartLayout,
-                        title: "PCS2",
-                        xaxis: {
-                          ...commonChartLayout.xaxis,
-                          range: [startDate, endDate],
-                          autorange: false,
-                        },
-                        uirevision:
-                          isConnected +
-                          "pcs2" +
-                          opcuaData[selectedTab]?.history?.length,
-                      }}
-                      useResizeHandler={true}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: "400px",
-                        maxWidth: "100%",
-                        overflowX: "hidden",
-                      }}
-                      config={{
-                        responsive: true,
-                        displayModeBar: true,
-                        displaylogo: false,
-                        locale: "ko",
-                        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-                      }}
-                      onRelayout={handleRelayout}
-                    />
-                  </div>
-                )}
-                {selectedTab === "PCS3" && (
-                  <div className="chart-wrapper">
-                    <Plot
-                      data={getFilteredChartData(displayData.history, "PCS3")}
-                      layout={{
-                        ...commonChartLayout,
-                        title: "PCS3",
-                        xaxis: {
-                          ...commonChartLayout.xaxis,
-                          range: [startDate, endDate],
-                          autorange: false,
-                        },
-                        uirevision:
-                          isConnected +
-                          "pcs3" +
-                          opcuaData[selectedTab]?.history?.length,
-                      }}
-                      useResizeHandler={true}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: "400px",
-                        maxWidth: "100%",
-                        overflowX: "hidden",
-                      }}
-                      config={{
-                        responsive: true,
-                        displayModeBar: true,
-                        displaylogo: false,
-                        locale: "ko",
-                        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-                      }}
-                      onRelayout={handleRelayout}
-                    />
-                  </div>
-                )}
-                {selectedTab === "PCS4" && (
-                  <div className="chart-wrapper">
-                    <Plot
-                      data={getFilteredChartData(displayData.history, "PCS4")}
-                      layout={{
-                        ...commonChartLayout,
-                        title: "PCS4",
-                        xaxis: {
-                          ...commonChartLayout.xaxis,
-                          range: [startDate, endDate],
-                          autorange: false,
-                        },
-                        uirevision:
-                          isConnected +
-                          "pcs4" +
-                          opcuaData[selectedTab]?.history?.length,
-                      }}
-                      useResizeHandler={true}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        minHeight: "400px",
-                        maxWidth: "100%",
-                        overflowX: "hidden",
-                      }}
-                      config={{
-                        responsive: true,
-                        displayModeBar: true,
-                        displaylogo: false,
-                        locale: "ko",
-                        modeBarButtonsToRemove: ["lasso2d", "select2d"],
-                      }}
-                      onRelayout={handleRelayout}
-                    />
-                  </div>
+                {["Total", "PCS1", "PCS2", "PCS3", "PCS4"].map(
+                  (tab) =>
+                    selectedTab === tab && ( // 현재 선택된 탭만 렌더링
+                      <div className="chart-wrapper" key={tab}>
+                        <Plot
+                          data={getFilteredChartData(displayData.history, tab)}
+                          layout={{
+                            ...commonChartLayout,
+                            title:
+                              tab === "Total" ? `Total Trends (8MW)` : `${tab}`, // 타이틀 수정
+                            xaxis: {
+                              ...commonChartLayout.xaxis,
+                              autorange: true,
+                            }, // range 제거, autorange 사용
+                            // uirevision은 Plotly가 확대/축소 상태를 기억하게 함
+                            // 탭 전환 시에도 유지하려면 selectedTab과 데이터 길이를 조합
+                            uirevision:
+                              selectedTab + (displayData.history?.length || 0),
+                          }}
+                          useResizeHandler={true}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            minHeight: "400px",
+                            maxWidth: "100%",
+                            overflowX: "hidden",
+                          }}
+                          config={{
+                            responsive: true,
+                            displayModeBar: true,
+                            displaylogo: false,
+                            locale: "ko",
+                            modeBarButtonsToRemove: ["lasso2d", "select2d"],
+                          }}
+                          onRelayout={handleRelayout} // 비활성화된 핸들러 연결 유지
+                        />
+                      </div>
+                    )
                 )}
               </div>
             )}

@@ -150,7 +150,7 @@ const getFilteredChartData = (historyData, selectedTab) => {
       );
 
       return {
-        type: "scatter",
+        type: "scattergl",//gpu사용
         mode: "lines",
         name: fieldName,
         x: historyData.map((item) => new Date(item.timestamp)),

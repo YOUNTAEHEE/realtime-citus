@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../opcua/realtimeOpcua.scss";
@@ -478,9 +478,28 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
   );
 };
 
+// --- 데이터 샘플링 함수 ---
+const sampleData = (data, maxPoints) => {
+  if (!Array.isArray(data) || data.length <= maxPoints) {
+    return data; // 데이터가 없거나 이미 충분히 적으면 그대로 반환
+  }
+  console.log(
+    `Sampling data from ${data.length} to approximately ${maxPoints} points.`
+  );
+  const step = Math.max(1, Math.floor(data.length / maxPoints));
+  const sampled = [];
+  for (let i = 0; i < data.length; i += step) {
+    sampled.push(data[i]);
+  }
+  console.log(`Sampling finished. Sampled points: ${sampled.length}`);
+  return sampled;
+};
+// ------------------------
+
 export default function OpcuaHistoricalPage() {
   const [exportLoading, setExportLoading] = useState(false);
   const [exportError, setExportError] = useState(null);
+  // opcuaData: 원본 데이터 저장용 (CSV 내보내기 등)
   const [opcuaData, setOpcuaData] = useState({
     Total: { data: {}, history: [] },
     PCS1: { data: {}, history: [] },
@@ -488,6 +507,8 @@ export default function OpcuaHistoricalPage() {
     PCS3: { data: {}, history: [] },
     PCS4: { data: {}, history: [] },
   });
+  // displayData: 화면 표시용 데이터 (초기엔 샘플링, 확대 시 상세)
+  const [displayData, setDisplayData] = useState({ history: [] });
   const [selectedTab, setSelectedTab] = useState("Total");
   const [startDate, setStartDate] = useState(
     new Date(Date.now() - 3 * 60 * 60 * 1000)
@@ -495,14 +516,17 @@ export default function OpcuaHistoricalPage() {
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showTable, setShowTable] = useState(true);
-  const [historyData, setHistoryData] = useState({ columns: [], rows: [] });
+  const [showTable, setShowTable] = useState(false); // 차트 먼저 보이도록 false 유지
+  const [isZoomed, setIsZoomed] = useState(false); // 현재 확대 상태인지 여부
+
+  const MAX_DISPLAY_POINTS = 500; // 화면에 표시할 최대 데이터 포인트 수 (조절 가능)
+  const ZOOM_DETAIL_THRESHOLD_MS = 5 * 60 * 1000; // 상세 데이터 로드 기준 시간 (예: 5분)
 
   // --- 로그 추가 ---
   console.log("--- OpcuaHistoricalPage rendering ---");
   console.log(
     "OpcuaHistoricalPage state historyData:",
-    JSON.stringify(historyData)?.substring(0, 200) + "..."
+    JSON.stringify(displayData)?.substring(0, 200) + "..."
   ); // 상태 값 확인
   console.log("OpcuaHistoricalPage state loading:", loading);
   console.log("OpcuaHistoricalPage state error:", error);
@@ -510,15 +534,11 @@ export default function OpcuaHistoricalPage() {
   // ---------------
 
   const handleExportData = () => {
-    // 이미 가지고 있는 데이터 활용
-    const data = opcuaData[selectedTab].history;
-
+    const data = opcuaData[selectedTab].history; // 원본 데이터 사용
     if (!data || data.length === 0) {
       alert("내보낼 데이터가 없습니다.");
       return;
     }
-
-    // CSV 다운로드 트리거를 위해 csvLink 요소 클릭
     document.getElementById("csvDownloadLink").click();
   };
 
@@ -583,75 +603,196 @@ export default function OpcuaHistoricalPage() {
     }
   };
 
-  const fetchHistoricalData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+  // --- 데이터 요청 함수 수정: 시작/종료 시간 인자 받도록 변경 ---
+  const fetchHistoricalData = useCallback(
+    async (
+      fetchStartTime = startDate,
+      fetchEndTime = endDate,
+      isDetailed = false
+    ) => {
+      // isDetailed: 상세 데이터 요청인지 여부 (백엔드 API가 이를 활용할 수 있음)
+      console.log(
+        `Fetching data: ${
+          isDetailed ? "DETAILED" : "OVERVIEW"
+        } from ${fetchStartTime.toISOString()} to ${fetchEndTime.toISOString()}`
+      );
+      try {
+        // 상세 데이터 요청 시에는 로딩 상태를 약간 다르게 표시할 수도 있음 (선택 사항)
+        if (!isDetailed) setLoading(true); // 전체 조회 시에만 메인 로딩 표시
+        setError(null);
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
-      // 시간 범위 확인 로그 추가
-      console.log("요청 시간 범위:", {
-        시작: startDate.toISOString(),
-        종료: endDate.toISOString(),
-        간격_시간: (endDate - startDate) / (1000 * 60 * 60),
-      });
-      const startTimeISO = startDate.toISOString();
-      const endTimeISO = endDate.toISOString();
-      console.log("실제 전송될 ISO 시간:", {
-        start: startTimeISO,
-        end: endTimeISO,
-      }); // 전송 직전 값 확인
+        const apiUrl =
+          process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+        const startTimeISO = fetchStartTime.toISOString();
+        const endTimeISO = fetchEndTime.toISOString();
 
-      // URL 디버깅
-      console.log("요청 URL:", `${apiUrl}/api/opcua/historical`);
-      console.log("selectedTab:", selectedTab);
-      const response = await fetch(`${apiUrl}/api/opcua/historical`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startTime: startTimeISO, // 확인된 변수 사용
-          endTime: endTimeISO, // 확인된 변수 사용
-          deviceGroup: selectedTab,
-        }),
-      });
+        console.log("API 요청 시간:", { start: startTimeISO, end: endTimeISO });
+        const response = await fetch(`${apiUrl}/api/opcua/historical`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            startTime: startTimeISO,
+            endTime: endTimeISO,
+            deviceGroup: selectedTab,
+            // API가 해상도 파라미터를 지원한다면 여기에 추가
+            // resolution: isDetailed ? 'high' : 'low'
+          }),
+        });
 
-      // 응답 상태 디버깅
-      console.log("응답 상태:", response.status);
+        console.log("응답 상태:", response.status);
+        if (!response.ok)
+          throw new Error(`데이터 조회 실패: ${response.status}`);
 
-      if (!response.ok) {
-        throw new Error(`데이터 조회 실패: ${response.status}`);
+        const data = await response.json();
+        console.log("응답 데이터 항목 수:", data.timeSeriesData?.length || 0);
+
+        // 받은 데이터를 처리하는 함수 호출 (상세/개요 구분 전달)
+        processHistoricalData(data, isDetailed);
+      } catch (err) {
+        setError(err.message);
+        console.error("데이터 요청 오류:", err);
+        if (!isDetailed) {
+          // 전체 조회 실패 시에만 데이터 초기화
+          setOpcuaData((prev) => ({
+            ...prev,
+            [selectedTab]: { data: {}, history: [] },
+          }));
+          setDisplayData({ history: [] }); // 표시 데이터도 초기화
+        }
+      } finally {
+        if (!isDetailed) setLoading(false);
       }
+    },
+    [startDate, endDate, selectedTab]
+  ); // 의존성 배열 확인
 
-      const data = await response.json();
-      console.log("processHistoricalData 진입 시 data:", data);
+  // --- 데이터 처리 함수 수정: 샘플링 로직 추가 및 상태 업데이트 분리 ---
+  const processHistoricalData = (data, isDetailed = false) => {
+    try {
+      const rawHistoryData = data.timeSeriesData || [];
+      console.log(
+        `✅ 원본 데이터 수 (${isDetailed ? "상세" : "개요"}):`,
+        rawHistoryData.length
+      );
 
-      console.log("응답 데이터 항목 수:", data.timeSeriesData?.length || 0);
+      if (rawHistoryData.length > 0) {
+        const safeHistory = sanitizeHistoryData(rawHistoryData); // 객체 필터링
+        console.log("🧼 필터링 후 첫 데이터:", safeHistory[0]);
 
-      processHistoricalData(data);
-    } catch (err) {
-      setError(err.message);
-      console.error("데이터 요청 오류:", err);
-      // 오류 발생 시 현재 탭 데이터 초기화
-      setOpcuaData((prev) => ({
-        ...prev,
-        [selectedTab]: { data: {}, history: [] },
-      }));
-    } finally {
-      setLoading(false);
+        if (isDetailed) {
+          // 상세 데이터 요청 결과: displayData만 업데이트
+          console.log(
+            `🌟 상세 데이터 ${safeHistory.length}건 표시 데이터로 설정`
+          );
+          setDisplayData({ history: safeHistory });
+        } else {
+          // 전체(개요) 데이터 요청 결과: opcuaData와 displayData(샘플링) 모두 업데이트
+          console.log(
+            `💾 원본 데이터 ${safeHistory.length}건 opcuaData에 저장`
+          );
+          setOpcuaData((prevData) => {
+            // 원본 데이터 저장 (CSV용)
+            const newState = { ...prevData };
+            const lastDataPoint = safeHistory[safeHistory.length - 1] || {};
+            // 모든 탭에 할당할 필요 없음. 현재 탭만 업데이트
+            newState[selectedTab] = {
+              data: lastDataPoint,
+              history: safeHistory,
+            };
+            console.log(
+              `🔄 원본 데이터 상태 업데이트 완료 (${selectedTab} 탭)`
+            );
+            return newState;
+          });
+
+          // 화면 표시용 데이터 샘플링
+          const sampledHistory = sampleData(safeHistory, MAX_DISPLAY_POINTS);
+          console.log(
+            `📊 샘플링된 데이터 ${sampledHistory.length}건 표시 데이터로 설정`
+          );
+          setDisplayData({ history: sampledHistory });
+          setIsZoomed(false); // 전체 조회 후에는 확대 상태 해제
+        }
+      } else {
+        console.warn("⛔ 수신된 데이터가 없음");
+        if (!isDetailed) {
+          // 전체 조회 시 데이터 없음
+          setOpcuaData((prevData) => ({
+            ...prevData,
+            [selectedTab]: { data: {}, history: [] },
+          }));
+          setDisplayData({ history: [] });
+        } else {
+          // 상세 조회 시 데이터 없음 (이 경우는 거의 없지만)
+          // 필요시 처리 (예: 이전 샘플링 데이터로 복귀?)
+        }
+      }
+    } catch (e) {
+      console.error("❌ 데이터 처리 중 오류:", e);
+      setError("데이터 형식 오류");
     }
   };
 
-  // const sanitizeHistoryData = (data) =>
-  //   data.map((item) =>
-  //     Object.fromEntries(
-  //       Object.entries(item).filter(([k, v]) => typeof v !== "object")
-  //     )
-  //   );
+  // --- 차트 확대/축소 이벤트 핸들러 ---
+  const handleRelayout = useCallback(
+    (eventData) => {
+      console.log("Relayout event:", eventData);
+      // 'autosize' 이벤트 등 무시
+      if (eventData["autosize"] === true) return;
 
-  const sanitizeHistoryData = (data) =>
-    data.map((item) => {
+      // x축 범위 변경 감지
+      const newXRangeStart = eventData["xaxis.range[0]"];
+      const newXRangeEnd = eventData["xaxis.range[1]"];
+
+      if (newXRangeStart && newXRangeEnd) {
+        const startTime = new Date(newXRangeStart);
+        const endTime = new Date(newXRangeEnd);
+        const durationMs = endTime.getTime() - startTime.getTime();
+
+        console.log(
+          `Zoom detected: ${startTime.toISOString()} - ${endTime.toISOString()} (${(
+            durationMs /
+            1000 /
+            60
+          ).toFixed(1)} min)`
+        );
+
+        // 확대된 범위가 임계값보다 작으면 상세 데이터 요청
+        if (durationMs < ZOOM_DETAIL_THRESHOLD_MS) {
+          console.log("Zoomed in enough, fetching detailed data...");
+          setIsZoomed(true); // 확대 상태로 설정
+          // *** 중요: fetchHistoricalData 호출 시 새로운 시간 범위 전달 ***
+          fetchHistoricalData(startTime, endTime, true); // isDetailed = true
+        } else {
+          // 충분히 확대되지 않았거나 다시 축소한 경우
+          if (isZoomed) {
+            // 이전에 확대된 상태였다면
+            console.log("Zoomed out, reverting to sampled data...");
+            // 원본 데이터에서 다시 샘플링하여 표시
+            const originalHistory = opcuaData[selectedTab]?.history || [];
+            const sampledHistory = sampleData(
+              originalHistory,
+              MAX_DISPLAY_POINTS
+            );
+            setDisplayData({ history: sampledHistory });
+            setIsZoomed(false); // 확대 상태 해제
+          }
+        }
+      } else if (eventData["xaxis.autorange"] === true) {
+        // 오토레인지 (전체보기)로 돌아간 경우
+        console.log("Autorange triggered, reverting to sampled data...");
+        const originalHistory = opcuaData[selectedTab]?.history || [];
+        const sampledHistory = sampleData(originalHistory, MAX_DISPLAY_POINTS);
+        setDisplayData({ history: sampledHistory });
+        setIsZoomed(false); // 확대 상태 해제
+      }
+    },
+    [fetchHistoricalData, selectedTab, opcuaData, isZoomed]
+  ); // 필요한 의존성 추가
+
+  // --- sanitizeHistoryData 함수 (기존과 동일) ---
+  const sanitizeHistoryData = (data) => {
+    const newData = data.map((item) => {
       const newItem = Object.fromEntries(
         Object.entries(item).filter(
           ([k, v]) => typeof v !== "object" || k === "timestamp"
@@ -659,44 +800,15 @@ export default function OpcuaHistoricalPage() {
       );
       return newItem;
     });
-  const processHistoricalData = (data) => {
-    try {
-      const rawHistoryData = data.timeSeriesData || [];
-      console.log("✅ 원본 데이터 수:", rawHistoryData.length);
-
-      if (rawHistoryData.length > 0) {
-        const safeHistory = sanitizeHistoryData(rawHistoryData);
-        console.log("🧼 필터링 후 데이터:", safeHistory[0]);
-
-        // 모든 탭의 history에 전체 safeHistory 할당 (기존 로직 유지)
-        setOpcuaData((prevData) => {
-          const newState = { ...prevData };
-          const lastDataPoint = safeHistory[safeHistory.length - 1] || {};
-          const allTabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
-          allTabs.forEach((tab) => {
-            newState[tab] = {
-              data: lastDataPoint,
-              history: safeHistory,
-            };
-          });
-          console.log(
-            "🔄 상태 업데이트 완료. 모든 탭에 history 할당됨.",
-            newState
-          );
-          return newState;
-        });
-      } else {
-        console.warn("⛔ 수신된 데이터가 없음");
-        setOpcuaData((prevData) => ({
-          ...prevData,
-          [selectedTab]: { data: {}, history: [] },
-        }));
-      }
-    } catch (e) {
-      console.error("❌ 데이터 처리 중 오류:", e);
-      setError("데이터 형식 오류");
-    }
+    return newData;
   };
+
+  // --- 초기 데이터 로드 (useEffect 사용) ---
+  useEffect(() => {
+    // 컴포넌트 마운트 시 또는 startDate, endDate, selectedTab 변경 시 초기 데이터(샘플링) 로드
+    // fetchHistoricalData(startDate, endDate, false); // isDetailed = false <-- 이 줄을 주석 처리 또는 삭제
+    // 더 이상 자동으로 데이터를 로드하지 않습니다.
+  }, [startDate, endDate, selectedTab, fetchHistoricalData]); // 의존성 배열은 유지해도 괜찮습니다. fetchHistoricalData가 useCallback으로 감싸져 있기 때문입니다.
 
   return (
     <div className="opcua-container">
@@ -726,7 +838,7 @@ export default function OpcuaHistoricalPage() {
             minDate={startDate}
           />
           <button
-            onClick={fetchHistoricalData}
+            onClick={() => fetchHistoricalData(startDate, endDate, false)}
             className="search-button"
             disabled={loading}
           >
@@ -861,7 +973,7 @@ export default function OpcuaHistoricalPage() {
           >
             <div className="loading-spinner"></div>
           </div>
-        ) : opcuaData[selectedTab]?.history.length === 0 ? (
+        ) : displayData?.history.length === 0 ? (
           <div
             className="no-data-message"
             style={{
@@ -880,7 +992,7 @@ export default function OpcuaHistoricalPage() {
             {/* 테이블 또는 차트 표시 */}
             {showTable ? (
               <DataTable
-                historyData={{ rows: opcuaData[selectedTab].history }}
+                historyData={{ rows: displayData.history }}
                 isLoading={loading}
                 error={error}
                 selectedTab={selectedTab}
@@ -891,10 +1003,7 @@ export default function OpcuaHistoricalPage() {
                 {selectedTab === "Total" && (
                   <div className="chart-wrapper">
                     <Plot
-                      data={getFilteredChartData(
-                        opcuaData.Total.history,
-                        "Total"
-                      )}
+                      data={getFilteredChartData(displayData.history, "Total")}
                       layout={{
                         ...commonChartLayout,
                         title: `Total Trends (8MW)`,
@@ -903,7 +1012,8 @@ export default function OpcuaHistoricalPage() {
                           range: [startDate, endDate],
                           autorange: false,
                         },
-                        uirevision: "total",
+                        uirevision:
+                          "total" + (isZoomed ? "-zoomed" : "-overview"),
                       }}
                       useResizeHandler={true}
                       style={{
@@ -920,16 +1030,14 @@ export default function OpcuaHistoricalPage() {
                         locale: "ko",
                         modeBarButtonsToRemove: ["lasso2d", "select2d"],
                       }}
+                      onRelayout={handleRelayout}
                     />
                   </div>
                 )}
                 {selectedTab === "PCS1" && (
                   <div className="chart-wrapper">
                     <Plot
-                      data={getFilteredChartData(
-                        opcuaData.PCS1.history,
-                        "PCS1"
-                      )}
+                      data={getFilteredChartData(displayData.history, "PCS1")}
                       layout={{
                         ...commonChartLayout,
                         title: "PCS1 (2MW)",
@@ -938,7 +1046,8 @@ export default function OpcuaHistoricalPage() {
                           range: [startDate, endDate],
                           autorange: false,
                         },
-                        uirevision: "pcs1",
+                        uirevision:
+                          "pcs1" + (isZoomed ? "-zoomed" : "-overview"),
                       }}
                       useResizeHandler={true}
                       style={{
@@ -955,16 +1064,14 @@ export default function OpcuaHistoricalPage() {
                         locale: "ko",
                         modeBarButtonsToRemove: ["lasso2d", "select2d"],
                       }}
+                      onRelayout={handleRelayout}
                     />
                   </div>
                 )}
                 {selectedTab === "PCS2" && (
                   <div className="chart-wrapper">
                     <Plot
-                      data={getFilteredChartData(
-                        opcuaData.PCS2.history,
-                        "PCS2"
-                      )}
+                      data={getFilteredChartData(displayData.history, "PCS2")}
                       layout={{
                         ...commonChartLayout,
                         title: "PCS2",
@@ -973,7 +1080,8 @@ export default function OpcuaHistoricalPage() {
                           range: [startDate, endDate],
                           autorange: false,
                         },
-                        uirevision: "pcs2",
+                        uirevision:
+                          "pcs2" + (isZoomed ? "-zoomed" : "-overview"),
                       }}
                       useResizeHandler={true}
                       style={{
@@ -990,16 +1098,14 @@ export default function OpcuaHistoricalPage() {
                         locale: "ko",
                         modeBarButtonsToRemove: ["lasso2d", "select2d"],
                       }}
+                      onRelayout={handleRelayout}
                     />
                   </div>
                 )}
                 {selectedTab === "PCS3" && (
                   <div className="chart-wrapper">
                     <Plot
-                      data={getFilteredChartData(
-                        opcuaData.PCS3.history,
-                        "PCS3"
-                      )}
+                      data={getFilteredChartData(displayData.history, "PCS3")}
                       layout={{
                         ...commonChartLayout,
                         title: "PCS3",
@@ -1008,7 +1114,8 @@ export default function OpcuaHistoricalPage() {
                           range: [startDate, endDate],
                           autorange: false,
                         },
-                        uirevision: "pcs3",
+                        uirevision:
+                          "pcs3" + (isZoomed ? "-zoomed" : "-overview"),
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1025,16 +1132,14 @@ export default function OpcuaHistoricalPage() {
                         locale: "ko",
                         modeBarButtonsToRemove: ["lasso2d", "select2d"],
                       }}
+                      onRelayout={handleRelayout}
                     />
                   </div>
                 )}
                 {selectedTab === "PCS4" && (
                   <div className="chart-wrapper">
                     <Plot
-                      data={getFilteredChartData(
-                        opcuaData.PCS4.history,
-                        "PCS4"
-                      )}
+                      data={getFilteredChartData(displayData.history, "PCS4")}
                       layout={{
                         ...commonChartLayout,
                         title: "PCS4",
@@ -1043,7 +1148,8 @@ export default function OpcuaHistoricalPage() {
                           range: [startDate, endDate],
                           autorange: false,
                         },
-                        uirevision: "pcs4",
+                        uirevision:
+                          "pcs4" + (isZoomed ? "-zoomed" : "-overview"),
                       }}
                       useResizeHandler={true}
                       style={{
@@ -1060,6 +1166,7 @@ export default function OpcuaHistoricalPage() {
                         locale: "ko",
                         modeBarButtonsToRemove: ["lasso2d", "select2d"],
                       }}
+                      onRelayout={handleRelayout}
                     />
                   </div>
                 )}

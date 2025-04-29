@@ -455,107 +455,34 @@ export default function OpcuaHistoricalPage() {
   const isReceivingChunks = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const ws = useRef(null);
-  const workerRef = useRef(null);
 
   // --- 페이지네이션 상태 추가 ---
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(100); // 페이지당 항목 수 (조절 가능)
   // ---------------------------
 
-  // --- 웹소켓 및 워커 설정 useEffect ---
+  // --- 웹소켓 연결 설정 (onmessage 핸들러에 청크 로직 복원) ---
   useEffect(() => {
-    // 워커 생성
-    workerRef.current = new Worker("/historicalWorker.js"); // public 경로 기준
-    console.log("Web Worker created.");
+    // 1. 웹소켓 접속 URL 문자열 생성
+    //    NEXT_PUBLIC_WS_URL 환경 변수가 있으면 사용하고, 없으면 현재 호스트 기반으로 생성
 
-    // 워커로부터 메시지 수신 처리
-    workerRef.current.onmessage = (event) => {
-      const { type, payload } = event.data;
-      if (type === "processedData") {
-        console.log(
-          `Main: Received processed data (${payload.length} items) from worker.`
-        );
-        // --- 워커로부터 받은 데이터로 opcuaData 상태 업데이트 ---
-        setOpcuaData((prevData) => {
-          const newState = { ...prevData };
-          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
-          tabs.forEach((tab) => {
-            // 모든 탭에 동일한 처리된 데이터 저장
-            newState[tab] = { history: payload };
-          });
-          console.log(
-            `💾 Stored ${payload.length} data points from worker for ALL tabs in opcuaData.`
-          );
-          return newState;
-        });
-        // --- 데이터 로드 완료 시 현재 페이지 1로 초기화 ---
-        setCurrentPage(1);
-        setLoading(false); // 워커 처리 완료 후 로딩 종료
-        // ------------------------------------------
-      } else if (type === "error") {
-        console.error("Main: Received error from worker:", payload);
-        setError(`Worker error: ${payload}`);
-        setLoading(false); // 워커 에러 시 로딩 종료
-        // 워커 에러 시에도 페이지 초기화 및 데이터 초기화
-        setOpcuaData((prev) => {
-          const newState = { ...prev };
-          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
-          tabs.forEach((tab) => {
-            newState[tab] = { history: [] };
-          });
-          return newState;
-        });
-        setDisplayData({ history: [] });
-        setCurrentPage(1);
-      }
-    };
-
-    // 워커 에러 처리 (선택적)
-    workerRef.current.onerror = (errorEvent) => {
-      console.error("Main: Uncaught worker error Event:", errorEvent); // 전체 이벤트 객체 로깅
-
-      // --- 개별 속성 로깅 추가 ---
-      console.log("--> errorEvent.message:", errorEvent.message);
-      console.log("--> errorEvent.filename:", errorEvent.filename);
-      console.log("--> errorEvent.lineno:", errorEvent.lineno);
-      console.log("--> errorEvent.colno:", errorEvent.colno);
-      // errorEvent.error 속성도 확인 (에러 원본 객체를 포함하는 경우가 있음)
-      console.log("--> errorEvent.error:", errorEvent.error);
-      // --------------------------
-
-      // ErrorEvent 객체에서 message, filename, lineno 추출 시도
-      const errorMessage = errorEvent.message || "Unknown worker error";
-      const errorLocation = errorEvent.filename
-        ? ` at ${errorEvent.filename}:${errorEvent.lineno}`
-        : "";
-      const fullErrorMessage = `Uncaught worker error: ${errorMessage}${errorLocation}`;
-
-      console.error("Main: Extracted worker error message:", fullErrorMessage);
-
-      setError(fullErrorMessage);
-      setLoading(false);
-      // 상태 초기화 등 추가 에러 처리
-      setOpcuaData((prev) => {
-        const newState = { ...prev };
-        const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
-        tabs.forEach((tab) => {
-          newState[tab] = { history: [] };
-        });
-        return newState;
-      });
-      setDisplayData({ history: [] });
-      setCurrentPage(1);
-    };
-
-    // 웹소켓 연결 설정 (기존 로직 유지, onmessage 부분 수정)
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
     const wsUrl = apiUrl.replace(/^http/, "ws");
     const wsUrlString = `${wsUrl}/api/opcua/historical/ws`;
-    console.log("Attempting to connect WebSocket:", wsUrlString);
+    // // const wsUrlString =
+    // //   process.env.NEXT_PUBLIC_WS_URL ||
+    //   `${window.location.origin.replace(
+    //     /^http/,
+    //     "ws"
+    //   )}/api/opcua/historical/ws`;
+
+    console.log("Attempting to connect WebSocket:", wsUrlString); // 생성된 URL 문자열 확인
 
     try {
+      // 2. 생성된 URL 문자열로 WebSocket 객체 생성 및 ref에 할당
       ws.current = new WebSocket(wsUrlString);
 
+      // 3. 이벤트 핸들러 등록
       ws.current.onopen = () => {
         console.log("WebSocket Connected");
         setIsConnected(true);
@@ -565,65 +492,81 @@ export default function OpcuaHistoricalPage() {
       ws.current.onclose = (event) => {
         console.log("WebSocket Disconnected:", event.reason, event.code);
         setIsConnected(false);
-        // 웹소켓 닫힐 때 워커도 종료 (선택적, 재연결 시 새로 생성 필요)
-        // if (workerRef.current) {
-        //   console.log("Terminating worker due to WebSocket close.");
-        //   workerRef.current.terminate();
-        //   workerRef.current = null;
-        // }
+        // --- 연결 종료 시 청크 수신 상태 초기화 ---
+        isReceivingChunks.current = false;
+        accumulatedChunks.current = []; // ref 초기화
+        // ------------------------------------
+        if (!event.wasClean) {
+          setError(
+            `웹소켓 연결이 끊어졌습니다 (코드: ${event.code}). 페이지를 새로고침하거나 다시 시도해주세요.`
+          );
+        }
+        // 연결 끊기면 로딩 상태도 해제
+        if (loading) setLoading(false);
       };
 
       ws.current.onerror = (err) => {
         console.error("WebSocket Error Object:", err);
         setIsConnected(false);
-        // 에러 시 워커 종료 (선택적)
-        // if (workerRef.current) {
-        //   console.log("Terminating worker due to WebSocket error.");
-        //   workerRef.current.terminate();
-        //   workerRef.current = null;
-        // }
+        // --- 에러 시 청크 수신 상태 초기화 ---
+        isReceivingChunks.current = false;
+        accumulatedChunks.current = []; // ref 초기화
+        // ---------------------------------
+        setError("웹소켓 연결 중 오류가 발생했습니다. 콘솔을 확인하세요.");
+        // 에러 발생 시 로딩 상태 해제
+        if (loading) setLoading(false);
       };
 
-      // --- 웹소켓 onmessage 핸들러 수정 ---
+      // --- onmessage 핸들러: 청크 수신 로직 복원 ---
       ws.current.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
 
           if (message.type === "historicalDataChunk") {
-            // 청크 데이터를 워커로 전송
-            if (workerRef.current) {
-              workerRef.current.postMessage({
-                type: "chunk",
-                payload: message.payload,
-              });
+            // 첫 청크 수신 시 플래그 설정 및 ref 초기화
+            if (!isReceivingChunks.current) {
+              console.log("Receiving data chunks...");
+              isReceivingChunks.current = true;
+              accumulatedChunks.current = []; // Start fresh
+            }
+            // 받은 청크 데이터를 ref 배열에 직접 추가
+            if (message.payload && Array.isArray(message.payload)) {
+              accumulatedChunks.current.push(...message.payload);
+            } else {
+              console.warn(
+                "Received chunk payload is not an array or is null/undefined:",
+                message.payload
+              );
             }
           } else if (message.type === "historicalDataEnd") {
             console.log(
-              "Main: All data chunks received via WebSocket. Signaling worker to process."
+              "All data chunks received. Processing accumulated data for ALL tabs..."
             );
-            // 워커에게 데이터 처리 시작 신호 전송
-            if (workerRef.current) {
-              workerRef.current.postMessage({ type: "end" });
-            }
-            // 로딩 상태는 유지하고, 워커가 결과를 보내면 해제됨
+            // --- 데이터 수신 완료 처리 ---
+            isReceivingChunks.current = false; // 플래그 해제
+            // ref에 누적된 전체 데이터를 processHistoricalData로 전달
+            // 백엔드가 payload 없이 End 메시지만 보낼 수도 있으므로 accumulatedChunks 사용
+            processHistoricalData({
+              timeSeriesData: accumulatedChunks.current,
+            });
+            accumulatedChunks.current = []; // ref 비우기 (처리 후)
+            setLoading(false); // 모든 데이터 처리 후 로딩 종료
+            // --------------------------
           } else if (message.type === "historicalDataResponse") {
-            // 단일 응답 처리 (웹 워커 사용 안 함 - 필요 시 로직 추가)
             console.warn(
-              "Received single 'historicalDataResponse'. Processing in main thread (Worker not used for this)."
+              "Received 'historicalDataResponse'. This app is configured for chunked messages ('historicalDataChunk' & 'historicalDataEnd'). Processing as single response."
             );
-            // processHistoricalData(message.payload); // 이 함수는 제거됨
-            // 단일 응답 처리 로직 필요 시 여기에 추가 (sanitize 등)
-            // const sanitized = sanitizeHistoryData(message.payload?.timeSeriesData || []); // sanitize 함수도 제거됨
-            // setOpcuaData(...);
+            // 단일 응답도 처리 (하위 호환성 또는 혼용 대비)
+            processHistoricalData(message.payload);
             setLoading(false);
           } else if (message.type === "error") {
             console.error("WebSocket server error:", message.payload);
             setError(message.payload?.message || "서버 오류 발생");
             setLoading(false); // 에러 시 로딩 종료
-            // 에러 시 워커 리셋 (선택적)
-            if (workerRef.current) {
-              workerRef.current.postMessage({ type: "reset" });
-            }
+            // --- 에러 시 청크 수신 상태 초기화 ---
+            isReceivingChunks.current = false;
+            accumulatedChunks.current = [];
+            // ---------------------------------
           } else {
             console.warn("Unknown message type received:", message.type);
           }
@@ -631,10 +574,10 @@ export default function OpcuaHistoricalPage() {
           console.error("Error processing WebSocket message:", e);
           setError("수신된 데이터 처리 중 오류 발생");
           setLoading(false);
-          // 에러 시 워커 리셋 (선택적)
-          if (workerRef.current) {
-            workerRef.current.postMessage({ type: "reset" });
-          }
+          // --- 에러 시 청크 수신 상태 초기화 ---
+          isReceivingChunks.current = false;
+          accumulatedChunks.current = [];
+          // ---------------------------------
         }
       };
     } catch (error) {
@@ -643,24 +586,94 @@ export default function OpcuaHistoricalPage() {
       setIsConnected(false);
     }
 
-    // 컴포넌트 언마운트 시 워커 및 웹소켓 정리
+    // 컴포넌트 언마운트 시 웹소켓 연결 해제
     return () => {
-      console.log("Cleaning up WebSocket and Worker...");
-      if (
-        ws.current &&
-        (ws.current.readyState === WebSocket.OPEN ||
-          ws.current.readyState === WebSocket.CONNECTING)
-      ) {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        console.log("Closing WebSocket connection...");
         ws.current.close();
-        console.log("WebSocket connection closed.");
-      }
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-        console.log("Web Worker terminated.");
+      } else if (ws.current && ws.current.readyState === WebSocket.CONNECTING) {
+        console.log("Closing WebSocket connection attempt...");
+        // 연결 시도 중일 때도 close() 호출 가능 (연결 시도 중단)
+        ws.current.close();
       }
     };
   }, []); // 의존성 배열 비어있음 (마운트 시 1회 실행)
+
+  // --- sanitizeHistoryData 함수 정의를 processHistoricalData 앞으로 이동 ---
+  const sanitizeHistoryData = useCallback((data) => {
+    console.log("Sanitizing data..."); // 로그 추가
+    const newData = data.map((item) => {
+      const newItem = Object.fromEntries(
+        Object.entries(item).filter(
+          ([k, v]) => typeof v !== "object" || k === "timestamp"
+        )
+      );
+      return newItem;
+    });
+    return newData;
+  }, []); // 의존성 배열 비어있음
+
+  // --- 데이터 처리 함수: 이제 sanitizeHistoryData를 의존성으로 사용 가능 ---
+  const processHistoricalData = useCallback(
+    (data) => {
+      console.log("--- processHistoricalData called ---");
+      try {
+        const rawHistoryData = data?.timeSeriesData || [];
+        console.log(
+          `✅ Processing ${rawHistoryData.length} accumulated data points.`
+        );
+
+        if (rawHistoryData.length > 50000) {
+          console.warn(
+            `🚨 Warning: Processing a large amount of data (${rawHistoryData.length}). Browser performance may be affected.`
+          );
+        }
+
+        let safeHistory = [];
+        if (rawHistoryData.length > 0) {
+          // 이제 sanitizeHistoryData를 안전하게 호출 가능
+          safeHistory = sanitizeHistoryData(rawHistoryData);
+          console.log(`🧼 Sanitized data points:`, safeHistory.length);
+        } else {
+          console.warn("⛔ Accumulated data is empty after receiving chunks.");
+        }
+
+        // --- 모든 탭의 history를 누적된 전체 데이터(safeHistory)로 업데이트 ---
+        setOpcuaData((prevData) => {
+          const newState = { ...prevData };
+          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+          tabs.forEach((tab) => {
+            newState[tab] = { history: safeHistory }; // 모든 탭에 동일한 데이터 저장
+          });
+          console.log(
+            `💾 Stored ${safeHistory.length} data points for ALL tabs in opcuaData.`
+          );
+          return newState;
+        });
+
+        // --- 데이터 로드 완료 시 현재 페이지 1로 초기화 ---
+        setCurrentPage(1);
+        // ------------------------------------------
+
+        // displayData는 useEffect [selectedTab, opcuaData] 에서 자동으로 업데이트됨
+      } catch (e) {
+        console.error("❌ Error processing historical data:", e);
+        setError("데이터 형식 처리 오류");
+        // 오류 발생 시 모든 탭 데이터 초기화
+        setOpcuaData((prev) => {
+          const newState = { ...prev };
+          const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
+          tabs.forEach((tab) => {
+            newState[tab] = { history: [] };
+          });
+          return newState;
+        });
+        setDisplayData({ history: [] }); // 화면 표시 데이터도 초기화
+        setCurrentPage(1); // 오류 시에도 페이지 초기화
+      }
+    },
+    [sanitizeHistoryData] // 여기에 sanitizeHistoryData를 넣어도 이제 문제 없음
+  );
 
   // --- updateDateRange 함수 정의를 날짜 변경 핸들러 앞으로 이동 ---
   const updateDateRange = (changedDate, changeSource) => {
@@ -768,39 +781,32 @@ export default function OpcuaHistoricalPage() {
   }, []);
   // ----------------------------------------------------
 
-  // --- 조회 버튼 클릭 핸들러 수정 ---
+  // --- 조회 버튼 클릭 핸들러: currentPage 초기화 추가 ---
   const handleSearchClick = () => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       setError("웹소켓이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
       return;
     }
-    if (!workerRef.current) {
-      setError("웹 워커가 초기화되지 않았습니다. 페이지를 새로고침 해주세요.");
-      return;
-    }
 
     console.log(
-      `Sending historical data request (expecting chunked data for worker, triggered from ${selectedTab})...`
+      `Sending historical data request (expecting chunked data for all tabs, triggered from ${selectedTab})...`
     );
     setLoading(true);
     setError(null);
-
-    // --- 데이터 상태 초기화 및 워커 리셋 ---
+    // --- 데이터 상태, 청크 Ref, 현재 페이지 초기화 ---
     setOpcuaData((prev) => {
       const newState = { ...prev };
       const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
       tabs.forEach((tab) => {
         newState[tab] = { history: [] };
       });
-      console.log("Cleared data state for all tabs before request.");
+      console.log("Cleared data for all tabs before request.");
       return newState;
     });
     setDisplayData({ history: [] });
+    accumulatedChunks.current = [];
+    isReceivingChunks.current = false;
     setCurrentPage(1); // 조회 시작 시 페이지 1로 초기화
-
-    // 워커의 누적 데이터 리셋 요청
-    workerRef.current.postMessage({ type: "reset" });
-    console.log("Sent reset signal to worker.");
     // ----------------------------------------------
 
     const startTimeISO = startDate.toISOString();
@@ -820,29 +826,32 @@ export default function OpcuaHistoricalPage() {
       console.error("WebSocket send error:", err);
       setError("데이터 요청 전송 실패");
       setLoading(false);
-      // 에러 시 워커 리셋 (선택적)
-      if (workerRef.current) {
-        workerRef.current.postMessage({ type: "reset" });
-      }
-      setCurrentPage(1);
+      // 에러 시에도 청크 상태 초기화
+      accumulatedChunks.current = [];
+      isReceivingChunks.current = false;
+      setCurrentPage(1); // 에러 시에도 초기화
     }
   };
+  // ---------------------------------------------------
 
   // --- CSV 내보내기 핸들러 (변경 없음) ---
   const handleExportData = () => {
     // ... (CSV 내보내기 로직) ...
   };
 
-  // --- 탭 변경 시 로직 (변경 없음, opcuaData 업데이트 시 자동으로 displayData 업데이트됨) ---
+  // --- 탭 변경 시 로직: currentPage 초기화 추가 ---
   useEffect(() => {
     console.log(
       `Tab changed to: ${selectedTab} or opcuaData updated. Updating display data.`
     );
     setDisplayData({ history: opcuaData[selectedTab]?.history || [] });
-    setCurrentPage(1); // 탭 변경 시 페이지 1로 초기화
+    // --- 탭 변경 시 현재 페이지 1로 초기화 ---
+    setCurrentPage(1);
+    // -------------------------------------
   }, [selectedTab, opcuaData]);
+  // ------------------------------------------
 
-  // --- 페이지 변경 핸들러 (변경 없음) ---
+  // --- 페이지 변경 핸들러 함수 추가 ---
   const handlePageChange = (newPage) => {
     // 유효한 페이지 번호인지 확인 (1 이상, totalPages 이하)
     const totalItems = displayData.history?.length || 0;
@@ -851,18 +860,21 @@ export default function OpcuaHistoricalPage() {
       setCurrentPage(newPage);
     }
   };
+  // --------------------------------
 
-  // --- JSX 반환 전 데이터 슬라이싱 (변경 없음) ---
+  // --- JSX 반환 전 데이터 슬라이싱 ---
   const totalItems = displayData.history?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
+  // 현재 테이블/차트에 표시될 데이터
   const currentDisplayData = useMemo(
     () => displayData.history?.slice(startIndex, endIndex) || [],
     [displayData.history, currentPage, itemsPerPage] // 의존성 배열 수정
   );
+  // --------------------------------
 
-  // --- JSX 반환 부분 (변경 없음) ---
+  // --- JSX 반환 부분 ---
   return (
     <div className="opcua-container">
       {/* Header 부분 (기존과 동일) */}

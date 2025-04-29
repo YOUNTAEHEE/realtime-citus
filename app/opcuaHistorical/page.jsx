@@ -20,10 +20,10 @@ const Plot = dynamic(
 // });
 
 // FixedSizeList 동적 import (ssr: false 적용)
-const FixedSizeList = dynamic(
-  () => import("react-window").then((mod) => mod.FixedSizeList),
-  { ssr: false }
-);
+// const FixedSizeList = dynamic(
+//   () => import("react-window").then((mod) => mod.FixedSizeList),
+//   { ssr: false }
+// );
 
 // 차트 레이아웃 설정 (기존과 동일)
 const commonChartLayout = {
@@ -168,258 +168,109 @@ const getFilteredChartData = (historyData, selectedTab) => {
     .filter((series) => series.y.some((val) => val !== null));
 };
 
-// DataTable 컴포넌트 정의
-const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
-  // --- 로깅: 컴포넌트 시작 시 받는 props 확인 (디버깅 완료 후 제거 가능) ---
-  console.log("--- DataTable received props ---");
-  // console.log('DataTable received historyData:', JSON.stringify(historyData)?.substring(0, 200) + '...');
-  // console.log('DataTable received isLoading:', isLoading);
-  // console.log('DataTable received error:', error);
-  // console.log('DataTable received selectedTab:', selectedTab);
-  // --- 로깅 끝 ---
+// --- DataTable 컴포넌트 리팩토링 ---
+const DataTable = ({
+  paginatedData, // historyData 대신 paginatedData 수신
+  isLoading,
+  error,
+  selectedTab,
+  currentPage,
+  itemsPerPage,
+  totalItems,
+  onPageChange,
+}) => {
+  // --- 로깅 제거 또는 수정 ---
+  // console.log("--- DataTable received props ---");
+  // console.log('DataTable received paginatedData length:', paginatedData?.length);
+  // console.log('DataTable received currentPage:', currentPage);
+  // console.log('DataTable received totalItems:', totalItems);
 
-  // --- useMemo 복원 ---
-
-  // 1. rowsArray 계산 (historyData.rows를 실제 배열로 변환)
-  const rowsArray = useMemo(() => {
-    console.log("DataTable: Calculating rowsArray (with useMemo)"); // 이제 useMemo 사용
-    if (!historyData || !historyData.rows) {
-      console.log(
-        "DataTable: historyData or historyData.rows is missing. Returning empty array."
-      );
-      return [];
-    }
-    if (Array.isArray(historyData.rows)) {
-      return historyData.rows;
-    } else {
-      console.warn(
-        "DataTable: historyData.rows is not a standard array. Converting using Array.from()."
-      );
-      try {
-        const convertedArray = Array.from(historyData.rows);
-        console.log(
-          `DataTable: Conversion successful. New array length: ${convertedArray.length}`
-        );
-        return convertedArray;
-      } catch (e) {
-        console.error(
-          "DataTable: Failed to convert historyData.rows to array:",
-          e
-        );
-        return [];
-      }
-    }
-  }, [historyData]); // historyData가 변경될 때만 재계산
-
-  // 2. columns 계산 (변환된 rowsArray와 selectedTab 기반)
   const columns = useMemo(() => {
-    console.log("DataTable: Calculating columns (with useMemo)"); // 이제 useMemo 사용
-    if (!rowsArray || rowsArray.length === 0) {
-      console.log(
-        "DataTable: rowsArray is invalid or empty for columns calculation."
-      );
+    // 컬럼 계산 로직은 첫 번째 데이터 아이템 기반으로 유지
+    if (!paginatedData || paginatedData.length === 0) {
+      // 데이터가 없으면 부모(OpcuaHistoricalPage)의 opcuaData에서 가져와야 할 수도 있음
+      // 하지만 여기서는 일단 빈 배열 반환
+      console.log("DataTable: No data available for column calculation.");
       return [];
     }
-    const firstItem = rowsArray[0];
+    const firstItem = paginatedData[0];
     if (!firstItem || typeof firstItem !== "object") {
-      console.log(
-        "DataTable: First row is invalid for columns calculation.",
-        firstItem
-      );
+      console.log("DataTable: First row is invalid for columns calculation.");
       return [];
     }
-    console.log(
-      "DataTable: Calculating columns based on selectedTab:",
-      selectedTab,
-      "and firstItem keys:",
-      Object.keys(firstItem)
-    );
+
     const allKeys = Object.keys(firstItem);
     const filteredKeys = allKeys.filter((key) => {
       if (key === "timestamp" || typeof firstItem[key] === "object")
         return false;
+      // selectedTab 기반 필터링 로직 유지
       if (selectedTab === "Total") {
-        const isPcsKey = /^PCS\d/.test(key);
-        const shouldInclude =
-          key.includes("Total") ||
-          key.includes("Filtered_Grid_Freq") ||
-          key.includes("_Grid_Freq");
-        return !isPcsKey && shouldInclude;
+        // return key.includes("Total") || key.includes("Filtered_Grid_Freq") || key.includes("T_Simul_P_REAL");
+        const isPcsKey = /^PCS\d/.test(key); // PCS로 시작하는지 확인
+        // PCS 키가 아니고, Total, Freq, REAL 관련 키 포함
+        return (
+          !isPcsKey &&
+          (key.includes("Total") ||
+            key.includes("Filtered_Grid_Freq") ||
+            key.includes("_Grid_Freq") ||
+            key.includes("T_Simul_P_REAL"))
+        );
       } else {
+        // PCS 탭이면 해당 PCS로 시작하는 키만
         return key.startsWith(selectedTab);
       }
     });
-    console.log("DataTable: Filtered keys for columns:", filteredKeys);
     return filteredKeys.map((key) => ({ id: key, label: key }));
-  }, [rowsArray, selectedTab]); // rowsArray 또는 selectedTab이 변경될 때만 재계산
+  }, [paginatedData, selectedTab]); // paginatedData가 변경될 때 컬럼 재계산
 
-  // 3. filteredData 계산 (계산된 columns와 rowsArray 포함)
-  const filteredData = useMemo(() => {
-    console.log("DataTable: Calculating filteredData (with useMemo)"); // 이제 useMemo 사용
-    console.log(
-      "DataTable: Preparing filteredData. Input rows:",
-      rowsArray.length,
-      "Calculated columns count:",
-      columns.length
-    );
-    // itemData는 columns와 rows를 모두 포함해야 함
-    return { columns: columns, rows: rowsArray };
-  }, [rowsArray, columns]); // rowsArray 또는 columns가 변경될 때만 재계산
+  // --- react-window 관련 RowWrapper 제거 ---
 
-  // --- /useMemo 복원 ---
-
-  // RowWrapper 함수 (이전과 동일 - 모든 컬럼 동적 렌더링)
-  const RowWrapper = ({ index, style, data }) => {
-    // 데이터 유효성 체크 (columns 포함 확인)
-    if (!data || !data.rows || !data.columns || !Array.isArray(data.columns)) {
-      console.error(
-        `RowWrapper ${index}: Invalid data structure! Missing rows or columns array.`
-      );
-      return <div style={style}>Error: Invalid data for row {index}</div>;
-    }
-
-    const rowData = data.rows[index];
-    const currentColumns = data.columns; // columns 배열 접근
-
-    // rowData 체크
-    if (!rowData) {
-      console.warn(`RowWrapper ${index}: rowData is missing.`);
-      return <div style={style}>Loading...</div>;
-    }
-
-    // 1. Timestamp 값 처리 (이전과 동일)
-    let displayTimestamp = "N/A";
-    try {
-      if (rowData.timestamp) {
-        const date = new Date(rowData.timestamp);
-        displayTimestamp = !isNaN(date.getTime())
-          ? date.toLocaleString()
-          : "Invalid Date";
-      }
-    } catch (e) {
-      console.error(`Error formatting timestamp for row ${index}:`, e);
-      displayTimestamp = "Timestamp Error";
-    }
-
-    // JSX 반환 (Timestamp와 모든 데이터 컬럼 동적 렌더링)
-    return (
-      <div
-        style={{
-          ...style,
-          display: "flex",
-          alignItems: "center",
-          borderBottom: "1px solid #eee",
-          background: index % 2 ? "#f9f9f9" : "#fff",
-          paddingLeft: "10px",
-          fontSize: "12px",
-        }}
-      >
-        {/* Timestamp 컬럼 */}
-        <div
-          style={{
-            width: "150px",
-            flexShrink: 0,
-            borderRight: "1px solid #eee",
-            padding: "0 5px",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {displayTimestamp}
-        </div>
-
-        {/* --- 모든 데이터 컬럼 동적 렌더링 (map 사용 복원) --- */}
-        {/* React Fragment 사용은 유지 */}
-        <>
-          {currentColumns.map((col) => {
-            // 각 컬럼 ID에 해당하는 셀 값 가져오기
-            const cellValue = rowData[col.id];
-            // 셀 값 표시 (null/undefined는 '-'로 표시, 나머지는 문자열로)
-            const displayValue =
-              cellValue === null || cellValue === undefined
-                ? "-"
-                : String(cellValue);
-            return (
-              // 각 셀을 나타내는 div
-              <div
-                key={col.id} // 고유 key prop 필수
-                title={displayValue} // 마우스 오버 시 전체 값 표시
-                style={{
-                  minWidth: "100px", // 최소 너비
-                  flex: 1, // 남은 공간 차지하도록
-                  borderRight: "1px solid #eee", // 우측 구분선
-                  padding: "0 5px", // 좌우 패딩
-                  textAlign: "right", // 우측 정렬
-                  overflow: "hidden", // 내용 넘칠 경우 숨김
-                  textOverflow: "ellipsis", // ... 처리
-                  whiteSpace: "nowrap", // 줄바꿈 방지
-                }}
-              >
-                {displayValue} {/* 실제 값 표시 */}
-              </div>
-            );
-          })}
-        </>
-        {/* --------------------------------------------------- */}
-      </div>
-    );
-  };
-
-  // renderHeader 함수 (계산된 columns 사용)
+  // 헤더 렌더링 함수 (columns 사용은 동일) - 스타일 개선
   const renderHeader = () => {
-    console.log("Rendering header with columns count:", columns.length);
-    if (!columns || columns.length === 0) {
-      return (
-        <div
-          style={{
-            height: "40px",
-            display: "flex",
-            alignItems: "center",
-            fontWeight: "bold",
-            borderBottom: "1px solid #ccc",
-            background: "#f0f0f0",
-            paddingLeft: "10px",
-          }}
-        >
-          컬럼 정의 없음
-        </div>
-      );
-    }
     return (
       <div
         style={{
-          height: "40px",
           display: "flex",
           alignItems: "center",
-          fontWeight: "bold",
-          borderBottom: "1px solid #ccc",
-          background: "#f0f0f0",
-          paddingLeft: "10px",
+          fontWeight: "600", // 글씨 약간 굵게
+          // borderBottom: "2px solid #dee2e6", // 하단 구분선 강화
+          borderBottom: "1px solid #ccc", // 기존 스타일 유지 또는 약간 조정
+          background: "#f8f9fa", // 배경색 변경 (약간 밝은 회색)
+          color: "#495057", // 텍스트 색상 변경 (어두운 회색)
+          padding: "0 10px", // 좌우 패딩 추가 (헤더 전체에 적용)
+          height: "45px", // 높이 약간 증가
+          position: "sticky",
+          top: 0,
+          zIndex: 1,
         }}
       >
+        {/* Timestamp 헤더 */}
         <div
           style={{
             width: "150px",
             flexShrink: 0,
-            borderRight: "1px solid #eee",
-            padding: "0 5px",
+            padding: "0 5px", // 셀 내부 패딩
+            textAlign: "center", // 중앙 정렬
+            borderRight: "1px solid #e9ecef", // 구분선 색상 변경
           }}
         >
           Timestamp
         </div>
+        {/* 데이터 컬럼 헤더 */}
         {columns.map((col) => (
           <div
             key={col.id}
             style={{
               minWidth: "100px",
               flex: 1,
-              borderRight: "1px solid #eee",
-              padding: "0 5px",
-              textAlign: "center",
+              padding: "0 5px", // 셀 내부 패딩
+              textAlign: "center", // 중앙 정렬
               overflow: "hidden",
               textOverflow: "ellipsis",
               whiteSpace: "nowrap",
+              borderRight: "1px solid #e9ecef", // 구분선 색상 변경 (마지막 요소 제외 가능)
+              // 마지막 요소 오른쪽 구분선 제거 (선택적)
+              // ...(columns[columns.length - 1].id === col.id ? { borderRight: 'none' } : {}),
             }}
           >
             {col.label}
@@ -429,22 +280,52 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
     );
   };
 
-  // DataTable 컴포넌트의 최종 return 문
-  // console.log("Rendering DataTable. Is loading?", isLoading); // 디버깅 로그 제거 가능
-  // console.log("Filtered data for rendering:", filteredData); // 디버깅 로그 제거 가능
+  // 페이지네이션 컨트롤 렌더링 함수
+  const renderPaginationControls = () => {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (totalPages <= 1) return null; // 페이지가 1개 이하면 컨트롤 표시 안 함
 
-  const itemCount = filteredData?.rows?.length ?? 0;
-  const itemDataForList = filteredData;
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "10px 0",
+          marginTop: "10px",
+          borderTop: "1px solid #eee",
+        }}
+      >
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          style={{
+            marginRight: "10px",
+            padding: "5px 10px",
+            cursor: "pointer",
+          }}
+        >
+          이전
+        </button>
+        <span>
+          페이지 {currentPage} / {totalPages} (총 {totalItems}개)
+        </span>
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          style={{ marginLeft: "10px", padding: "5px 10px", cursor: "pointer" }}
+        >
+          다음
+        </button>
+      </div>
+    );
+  };
 
-  // console.log(`DataTable: FixedSizeList Props Check: height=600, width=100%, itemCount=${itemCount}`); // 디버깅 로그 제거 가능
-  // console.log('DataTable: FixedSizeList itemData keys:', /* ... */); // 디버깅 로그 제거 가능
-  // if (...) { console.warn('DataTable: itemData structure issue detected! ...'); } // 디버깅 로그 제거 가능
-
+  // DataTable 컴포넌트 최종 return 문
   return (
     <div
       className="data-table-container"
-      // style={{ height: 600, width: "100%", border: "1px dashed red" }} // 테두리 제거 가능
-      style={{ height: 600, width: "100%" }}
+      style={{ width: "100%" }} // height 제거 (내용에 따라 조절)
     >
       {/* 로딩 중 표시 */}
       {isLoading && <div>데이터 로딩 중...</div>}
@@ -452,31 +333,84 @@ const DataTable = ({ historyData, isLoading, error, selectedTab }) => {
       {error && <div style={{ color: "red" }}>에러: {error}</div>}
 
       {/* 로딩/에러 아니고 데이터 있을 때 */}
-      {!isLoading && !error && itemCount > 0 && (
-        <>
+      {!isLoading && !error && paginatedData && paginatedData.length > 0 && (
+        <div style={{ maxHeight: "560px", overflowY: "auto" }}>
+          {" "}
+          {/* 스크롤 컨테이너 추가 */}
           {renderHeader()} {/* 헤더 렌더링 */}
-          <FixedSizeList
-            height={560}
-            itemCount={itemCount}
-            itemSize={35}
-            itemData={itemDataForList}
-            width="100%"
-            // style={{ border: '1px solid blue' }} // 테두리 제거 가능
-          >
-            {RowWrapper}
-          </FixedSizeList>
-        </>
-      )}
+          {/* --- react-window 대신 .map() 사용 --- */}
+          {paginatedData.map((rowData, index) => {
+            let displayTimestamp = "N/A";
+            try {
+              if (rowData.timestamp) {
+                const date = new Date(rowData.timestamp);
+                displayTimestamp = !isNaN(date.getTime())
+                  ? date.toLocaleString() // 날짜 형식 유지
+                  : "Invalid Date";
+              }
+            } catch (e) {
+              displayTimestamp = "Timestamp Error";
+            }
 
-      {/* 로딩/에러 아니고 데이터 없을 때 메시지 표시 */}
-      {!isLoading && !error && itemCount === 0 && (
-        <div>
-          표시할 데이터가 없습니다. 기간을 다시 설정하거나 필터를 확인하세요.
+            return (
+              <div
+                key={`row-${index}-${rowData.timestamp}`} // 고유 키 개선
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  borderBottom: "1px solid #eee",
+                  background: index % 2 ? "#f9f9f9" : "#fff",
+                  paddingLeft: "10px",
+                  fontSize: "12px",
+                  minHeight: "35px", // 최소 높이 유지
+                }}
+              >
+                {/* Timestamp 컬럼 */}
+                <div style={{ width: "150px", flexShrink: 0 /* ... */ }}>
+                  {displayTimestamp}
+                </div>
+                {/* 데이터 컬럼 동적 렌더링 (columns 사용) */}
+                {columns.map((col) => {
+                  const cellValue = rowData[col.id];
+                  const displayValue =
+                    cellValue === null || cellValue === undefined
+                      ? "-"
+                      : String(cellValue);
+                  return (
+                    <div
+                      key={col.id}
+                      title={displayValue}
+                      style={{
+                        minWidth: "100px",
+                        flex: 1,
+                        textAlign: "right" /* ... */,
+                      }}
+                    >
+                      {displayValue}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+          {/* --- .map() 끝 --- */}
         </div>
       )}
+      {/* 페이지네이션 컨트롤 추가 (데이터 있을 때만) */}
+      {!isLoading && !error && totalItems > 0 && renderPaginationControls()}
+
+      {/* 로딩/에러 아니고 데이터 없을 때 메시지 표시 */}
+      {!isLoading &&
+        !error &&
+        totalItems === 0 && ( // totalItems 기준으로 변경
+          <div>
+            표시할 데이터가 없습니다. 기간을 다시 설정하거나 필터를 확인하세요.
+          </div>
+        )}
     </div>
   );
 };
+// --- DataTable 컴포넌트 리팩토링 끝 ---
 
 // --- 데이터 샘플링 함수 ---
 const sampleData = (data, maxPoints) => {
@@ -516,14 +450,16 @@ export default function OpcuaHistoricalPage() {
   const [endDate, setEndDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showTable, setShowTable] = useState(true); // 차트 먼저 보이도록 false 유지
-  const [isZoomed, setIsZoomed] = useState(false); // 현재 확대 상태인지 여부
-  const accumulatedChunks = useRef([]); // 청크 누적용 ref
-  const isReceivingChunks = useRef(false); // 청크 수신 중 플래그
+  const [showTable, setShowTable] = useState(true); // 테이블 먼저 보이도록 true로 변경
+  const accumulatedChunks = useRef([]);
+  const isReceivingChunks = useRef(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const ws = useRef(null);
 
-  // --- 웹소켓 관련 상태 및 Ref ---
-  const [isConnected, setIsConnected] = useState(false); // 웹소켓 연결 상태
-  const ws = useRef(null); // 웹소켓 인스턴스 저장
+  // --- 페이지네이션 상태 추가 ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(100); // 페이지당 항목 수 (조절 가능)
+  // ---------------------------
 
   // --- 웹소켓 연결 설정 (onmessage 핸들러에 청크 로직 복원) ---
   useEffect(() => {
@@ -715,6 +651,10 @@ export default function OpcuaHistoricalPage() {
           return newState;
         });
 
+        // --- 데이터 로드 완료 시 현재 페이지 1로 초기화 ---
+        setCurrentPage(1);
+        // ------------------------------------------
+
         // displayData는 useEffect [selectedTab, opcuaData] 에서 자동으로 업데이트됨
       } catch (e) {
         console.error("❌ Error processing historical data:", e);
@@ -729,6 +669,7 @@ export default function OpcuaHistoricalPage() {
           return newState;
         });
         setDisplayData({ history: [] }); // 화면 표시 데이터도 초기화
+        setCurrentPage(1); // 오류 시에도 페이지 초기화
       }
     },
     [sanitizeHistoryData] // 여기에 sanitizeHistoryData를 넣어도 이제 문제 없음
@@ -827,15 +768,20 @@ export default function OpcuaHistoricalPage() {
   };
   // ------------------------------------------
 
-  // --- handleRelayout ---
+  // --- handleRelayout (확대/축소 관련 로직 제거 또는 수정) ---
   const handleRelayout = useCallback((eventData) => {
-    console.log(
-      "Relayout event occurred, but detailed fetching on zoom is currently disabled.",
-      eventData
-    );
+    // 확대/축소 시 상세 데이터 로딩 로직은 제거되었으므로, 이 함수는 비워두거나 로깅만 남깁니다.
+    console.log("Relayout event occurred:", eventData);
+    // 예: 확대 상태 관리 로직이 있었다면 제거
+    // if (eventData['xaxis.range[0]'] || eventData['xaxis.range']) {
+    //   setIsZoomed(true); // 확대 상태 표시 (만약 필요하다면)
+    // } else {
+    //   setIsZoomed(false); // 기본 상태로 돌아감
+    // }
   }, []);
+  // ----------------------------------------------------
 
-  // --- 조회 버튼 클릭 핸들러: 모든 탭 초기화 및 청크 상태 초기화 ---
+  // --- 조회 버튼 클릭 핸들러: currentPage 초기화 추가 ---
   const handleSearchClick = () => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       setError("웹소켓이 연결되지 않았습니다. 잠시 후 다시 시도해주세요.");
@@ -847,7 +793,7 @@ export default function OpcuaHistoricalPage() {
     );
     setLoading(true);
     setError(null);
-    // --- 데이터 상태 및 청크 Ref 초기화 (모든 탭 초기화) ---
+    // --- 데이터 상태, 청크 Ref, 현재 페이지 초기화 ---
     setOpcuaData((prev) => {
       const newState = { ...prev };
       const tabs = ["Total", "PCS1", "PCS2", "PCS3", "PCS4"];
@@ -857,15 +803,14 @@ export default function OpcuaHistoricalPage() {
       console.log("Cleared data for all tabs before request.");
       return newState;
     });
-    setDisplayData({ history: [] }); // 화면 표시도 초기화
-    accumulatedChunks.current = []; // 청크 누적 배열 초기화
-    isReceivingChunks.current = false; // 청크 수신 플래그 초기화
-    // ---------------------------
+    setDisplayData({ history: [] });
+    accumulatedChunks.current = [];
+    isReceivingChunks.current = false;
+    setCurrentPage(1); // 조회 시작 시 페이지 1로 초기화
+    // ----------------------------------------------
 
     const startTimeISO = startDate.toISOString();
     const endTimeISO = endDate.toISOString();
-
-    // 백엔드가 deviceGroup을 무시하고 모든 데이터를 청크로 보내준다고 가정
     const requestPayload = {
       type: "getHistoricalData", // 백엔드와 협의된 요청 타입
       payload: {
@@ -884,25 +829,52 @@ export default function OpcuaHistoricalPage() {
       // 에러 시에도 청크 상태 초기화
       accumulatedChunks.current = [];
       isReceivingChunks.current = false;
+      setCurrentPage(1); // 에러 시에도 초기화
     }
   };
+  // ---------------------------------------------------
 
   // --- CSV 내보내기 핸들러 (변경 없음) ---
   const handleExportData = () => {
     // ... (CSV 내보내기 로직) ...
   };
 
-  // --- 탭 변경 시 로직 (변경 없음) ---
-  // opcuaData가 업데이트되거나 selectedTab 변경 시 displayData 업데이트
+  // --- 탭 변경 시 로직: currentPage 초기화 추가 ---
   useEffect(() => {
     console.log(
       `Tab changed to: ${selectedTab} or opcuaData updated. Updating display data.`
     );
     setDisplayData({ history: opcuaData[selectedTab]?.history || [] });
+    // --- 탭 변경 시 현재 페이지 1로 초기화 ---
+    setCurrentPage(1);
+    // -------------------------------------
   }, [selectedTab, opcuaData]);
+  // ------------------------------------------
+
+  // --- 페이지 변경 핸들러 함수 추가 ---
+  const handlePageChange = (newPage) => {
+    // 유효한 페이지 번호인지 확인 (1 이상, totalPages 이하)
+    const totalItems = displayData.history?.length || 0;
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+  // --------------------------------
+
+  // --- JSX 반환 전 데이터 슬라이싱 ---
+  const totalItems = displayData.history?.length || 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  // 현재 테이블/차트에 표시될 데이터
+  const currentDisplayData = useMemo(
+    () => displayData.history?.slice(startIndex, endIndex) || [],
+    [displayData.history, currentPage, itemsPerPage] // 의존성 배열 수정
+  );
+  // --------------------------------
 
   // --- JSX 반환 부분 ---
-  // DataTable과 Plot 컴포넌트에 데이터를 전달하는 방식 확인 필요
   return (
     <div className="opcua-container">
       {/* Header 부분 (기존과 동일) */}
@@ -1075,7 +1047,7 @@ export default function OpcuaHistoricalPage() {
           >
             <div className="loading-spinner"></div>
           </div>
-        ) : displayData?.history.length === 0 ? (
+        ) : totalItems === 0 ? ( // totalItems 기준으로 변경
           <div
             className="no-data-message"
             style={{
@@ -1093,38 +1065,44 @@ export default function OpcuaHistoricalPage() {
           <>
             {/* 테이블 또는 차트 표시 */}
             {showTable ? (
+              // DataTable에 페이지네이션 관련 props 전달
               <DataTable
-                historyData={{ rows: displayData.history }}
+                paginatedData={currentDisplayData}
                 isLoading={loading}
                 error={error}
                 selectedTab={selectedTab}
+                currentPage={currentPage}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+                onPageChange={handlePageChange}
               />
             ) : (
               <div className="chart-container">
                 {/* 각 탭에 맞는 차트 렌더링 */}
                 {["Total", "PCS1", "PCS2", "PCS3", "PCS4"].map(
                   (tab) =>
-                    selectedTab === tab && ( // 현재 선택된 탭만 렌더링
+                    selectedTab === tab && (
                       <div className="chart-wrapper" key={tab}>
                         <Plot
-                          data={getFilteredChartData(displayData.history, tab)}
+                          data={getFilteredChartData(currentDisplayData, tab)}
                           layout={{
                             ...commonChartLayout,
-                            title:
-                              tab === "Total" ? `Total Trends (8MW)` : `${tab}`, // 타이틀 수정
+                            title: `${
+                              tab === "Total" ? "Total Trends" : tab
+                            } (Page ${currentPage})`,
                             xaxis: {
                               ...commonChartLayout.xaxis,
                               autorange: true,
-                            }, // range 제거, autorange 사용
-                            // uirevision은 Plotly가 확대/축소 상태를 기억하게 함
-                            // 탭 전환 시에도 유지하려면 selectedTab과 데이터 길이를 조합
-                            uirevision:
-                              selectedTab + (displayData.history?.length || 0),
+                            },
+                            yaxis: {
+                              ...commonChartLayout.yaxis,
+                              autorange: true,
+                            },
+                            uirevision: selectedTab + currentPage,
                           }}
                           useResizeHandler={true}
                           style={{
                             width: "100%",
-                            height: "100%",
                             minHeight: "400px",
                             maxWidth: "100%",
                             overflowX: "hidden",
@@ -1136,8 +1114,19 @@ export default function OpcuaHistoricalPage() {
                             locale: "ko",
                             modeBarButtonsToRemove: ["lasso2d", "select2d"],
                           }}
-                          onRelayout={handleRelayout} // 비활성화된 핸들러 연결 유지
+                          onRelayout={handleRelayout}
                         />
+                        <div
+                          style={{
+                            textAlign: "center",
+                            marginTop: "5px",
+                            fontSize: "12px",
+                            color: "#666",
+                          }}
+                        >
+                          Showing data for Table Page: {currentPage} /{" "}
+                          {totalPages}
+                        </div>
                       </div>
                     )
                 )}

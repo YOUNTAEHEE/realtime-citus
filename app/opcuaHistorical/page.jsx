@@ -835,8 +835,26 @@ export default function OpcuaHistoricalPage() {
   // ---------------------------------------------------
 
   // --- CSV 내보내기 핸들러 (변경 없음) ---
-  const handleExportData = () => {
-    // ... (CSV 내보내기 로직) ...
+  const handleExportData = async () => {
+    setExportLoading(true);
+    setExportError(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+      const startTimeISO = startDate.toISOString();
+      const endTimeISO = endDate.toISOString();
+      const exportUrl = `${apiUrl}/api/opcua/historical/export?startTime=${encodeURIComponent(
+        startTimeISO
+      )}&endTime=${encodeURIComponent(
+        endTimeISO
+      )}&deviceGroup=${encodeURIComponent(selectedTab)}`;
+      console.log("CSV 내보내기 요청 URL (HTTP):", exportUrl);
+      window.location.href = exportUrl; // 간단한 다운로드 트리거
+      setTimeout(() => setExportLoading(false), 2000); // 임시 로딩 해제
+    } catch (err) {
+      console.error("CSV 내보내기 오류:", err);
+      setExportError("CSV 데이터 내보내는 중 오류 발생");
+      setExportLoading(false);
+    }
   };
 
   // --- 탭 변경 시 로직: currentPage 초기화 추가 ---

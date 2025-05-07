@@ -344,11 +344,30 @@ const DataTable = ({
             try {
               if (rowData.timestamp) {
                 const date = new Date(rowData.timestamp);
-                displayTimestamp = !isNaN(date.getTime())
-                  ? date.toLocaleString() // 날짜 형식 유지
-                  : "Invalid Date";
+                if (!isNaN(date.getTime())) {
+                  displayTimestamp = date
+                    .toLocaleString("ko-KR", {
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      fractionalSecondDigits: 3,
+                      hour12: false,
+                    })
+                    .replace(/\.\s*/, ".");
+                } else {
+                  displayTimestamp = "Invalid Date";
+                }
               }
             } catch (e) {
+              console.error(
+                "Timestamp formatting error:",
+                e,
+                "for data:",
+                rowData.timestamp
+              );
               displayTimestamp = "Timestamp Error";
             }
 
@@ -458,7 +477,7 @@ export default function OpcuaHistoricalPage() {
 
   // --- 페이지네이션 상태 추가 ---
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(100); // 페이지당 항목 수 (조절 가능)
+  const [itemsPerPage, setItemsPerPage] = useState(5000); // 페이지당 항목 수 (조절 가능)
   // ---------------------------
 
   // --- 웹소켓 연결 설정 (onmessage 핸들러에 청크 로직 복원) ---
